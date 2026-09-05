@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# DevLog local state
+.devlog/
+devlog.db
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
