@@ -131,6 +131,22 @@ class ReviewEngineTests(unittest.TestCase):
         self.assertEqual(draft.claims, [])
         self.assertEqual(draft.questions, [])
 
+    def test_factual_summaries_are_marked_as_facts(self) -> None:
+        draft = build_review_draft(
+            project_name="demo",
+            range_start=at(1),
+            range_end=at(2),
+            events=[make_event(1, 1), make_event(2, 2)],
+            themes=[sample_theme()],
+            theme_summaries=[sample_summary()],
+            silence_periods=[],
+            factual_summaries=True,
+        )
+
+        timeline = [claim for claim in draft.claims if claim.section == SECTION_TIMELINE]
+        self.assertEqual(len(timeline), 1)
+        self.assertEqual(timeline[0].status, ClaimStatus.FACT)
+
 
 class MarkdownExportTests(unittest.TestCase):
     def _draft(self):

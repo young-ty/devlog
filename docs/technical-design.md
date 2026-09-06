@@ -14,7 +14,7 @@ V1 不包含 Bug 现场捕获、开发中批注、知识库检索（V2/V3）。
 ```
 ┌────────────────────────── DevLog 本地进程 ──────────────────────────┐
 │                                                                     │
-│   CLI（Typer）          Web UI（React + Vite，浏览器访问）            │
+│   CLI（argparse）       Web UI（React + Vite，浏览器访问）            │
 │        │                      │                                     │
 │        └──────────┬───────────┘                                     │
 │              FastAPI 本地服务（Uvicorn）                             │
@@ -41,7 +41,7 @@ V1 不包含 Bug 现场捕获、开发中批注、知识库检索（V2/V3）。
 | 层次 | 选型 | 说明 |
 |---|---|---|
 | 语言 | Python 3.12 | 核心逻辑与 AI 生态 |
-| CLI | Typer | 与 FastAPI 生态一致 |
+| CLI | argparse（MVP，标准库零依赖） | 解析层与 runner 服务层分离；正式打包时可换 Typer，业务逻辑不变 |
 | Git 读取 | subprocess 调用 `git log` / `git diff` / `git show` | 兼容所有 Git 版本，不依赖 GitPython |
 | LLM | DeepSeek API（OpenAI 兼容协议） | 通过 provider 抽象层接入，默认 DeepSeek，可替换 |
 | 结构化输出 | Pydantic v2 + JSON schema 校验 | 复盘论断强约束 + 重试/回退 |
@@ -83,9 +83,25 @@ V1 不包含 Bug 现场捕获、开发中批注、知识库检索（V2/V3）。
 
 ### 4.5 presentation（CLI / API / Web）
 
-- CLI 命令：`devlog init`、`devlog scan`、`devlog review generate`、`devlog review confirm`、`devlog export`；
-- FastAPI 提供同能力 REST 接口，Web 前端只消费 API；
-- 前端页面：项目概览 / 时间线 / AI 复盘编辑器（Bug 追踪为 V2 占位）。
+MVP CLI（模块六，`python -m devlog`）：
+
+| 命令 | 作用 |
+|---|---|
+| `init` | 注册 Git 仓库 |
+| `scan [--reset]` | 扫描 / 重建事件缓存 |
+| `review generate [--offline]` | 生成草稿（离线 = 规则事实摘要） |
+| `review list [--draft]` | 列出草稿 / 查看逐条论断 |
+| `review confirm` | AI 推断 → 已确认 |
+| `review export` | 草稿导出为 Markdown |
+
+`cli/main.py` 只做参数解析与结果打印，真正流程在 `cli/runner.py`
+（服务层），模块七 FastAPI 直接复用 runner。FastAPI 提供同能力 REST
+接口，Web 前端只消费 API；前端页面为项目概览 / 时间线 / AI 复盘编辑器
+（Bug 追踪为 V2 占位）。
+
+> 决策记录：V1 选用标准库 argparse 而非 Typer，是为了保持零第三方依赖，
+> 让 `python -m devlog` 开箱即用。解析层是薄壳，未来引入 Typer 只改
+> `cli/main.py`，不影响 runner 与核心模块。
 
 ## 5. 核心数据模型（初版）
 
@@ -115,6 +131,17 @@ V1 不包含 Bug 现场捕获、开发中批注、知识库检索（V2/V3）。
 | id / project_id / name / summary | 主题 |
 | sources_json | 来源 commit 列表 |
 | status | `fact` / `ai_pending` / `confirmed` |
+
+### review_drafts / review_claims（草稿与论断，schema v2）
+
+### review_drafts
+
+| 字段 | 说明 |
+|---|---|
+| id / project_id | 草稿 ID 与所属项目 |
+| range_start / range_end | 复盘时间范围 |
+| questions_json | 引导问题列表（非论断，单独存储） |
+| exported_path | 最近一次导出位置 |
 
 ### review_claims（草稿论断）
 
@@ -153,6 +180,8 @@ POST   /api/reviews/{draft_id}/export
 4. **结构化输出 + 校验**：AI 输出先过 Pydantic schema，非法则重试/降级，防止脏数据进入草稿。
 5. **防幻觉内建于数据模型**：论断区分"有来源的事实"与"待确认的推断"，无来源内容只能是引导问题。
 6. **成本可预期**：分块摘要 + 增量扫描 + 结果缓存，避免重复调用浪费 token。
+7. **数据库版本化演进**：`SCHEMA_VERSION = 2`，v1→v2 通过 `PRAGMA user_version`
+   迁移新增草稿表；旧库升级不丢数据，新库从零按序建表。
 
 ## 8. 安全与隐私
 
@@ -176,7 +205,7 @@ devlog/
 │   ├── storage/          # SQLite schema 与迁移
 │   ├── llm/              # provider 抽象与分块摘要
 │   └── review/           # 草稿组装与导出
-├── cli/                  # Typer 命令
+├── cli/                  # argparse 解析 + runner 服务层
 ├── server/               # FastAPI 应用
 ├── web/                  # React + Vite 前端
 ├── tests/

@@ -12,11 +12,20 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from devlog.core.git_source.models import CommitEvent, NoiseType
+from devlog.core.review.models import (
+    SECTION_DECISIONS,
+    SECTION_OVERVIEW,
+    SECTION_TIMELINE,
+    ClaimStatus,
+    ReviewClaim,
+    ReviewDraft,
+)
+from devlog.core.storage import database as database_module
 from devlog.core.storage.database import DevLogDB
 
 
 TZ = timezone(timedelta(hours=8))
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def at(day: int) -> datetime:
@@ -36,6 +45,40 @@ def make_event(number: int, day: int, noise: NoiseType = NoiseType.NONE) -> Comm
         deletions=0,
         parents_count=0,
         noise_type=noise,
+    )
+
+
+def make_v1_database(path: Path) -> None:
+    """Create a database that only knows schema version 1."""
+
+    conn = database_module.sqlite3.connect(str(path))
+    for statement in database_module._SCHEMA_V1_STATEMENTS:
+        conn.execute(statement)
+    conn.execute("PRAGMA user_version = 1")
+    conn.commit()
+    conn.close()
+
+
+def make_sample_draft() -> ReviewDraft:
+    return ReviewDraft(
+        project_name="demo",
+        range_start=at(1),
+        range_end=at(3),
+        claims=[
+            ReviewClaim(
+                section=SECTION_OVERVIEW,
+                text="共 2 次有效提交。",
+                sources=(f"{1:040d}", f"{2:040d}"),
+                status=ClaimStatus.FACT,
+            ),
+            ReviewClaim(
+                section=SECTION_TIMELINE,
+                text="主题「login」：实现了登录功能。",
+                sources=(f"{1:040d}",),
+                status=ClaimStatus.AI_PENDING,
+            ),
+        ],
+        questions=["这里发生了什么？", "下一步计划是什么？"],
     )
 
 
@@ -138,6 +181,101 @@ class DevLogDBTests(unittest.TestCase):
         self.assertEqual(removed, 2)
         self.assertEqual(self.db.list_events(project_id, include_noise=True), [])
         self.assertEqual(self.db.get_scan_cursor(project_id), "a" * 40)
+
+    def test_v1_database_upgrades_to_v2_and_keeps_data(self) -> None:
+        v1_path = Path(self._tmp.name) / "v1.db"
+        make_v1_database(v1_path)
+
+        old_conn = database_module.sqlite3.connect(str(v1_path))
+        old_conn.execute(
+            "INSERT INTO projects (name, path, created_at) VALUES (?, ?, ?)",
+            ("demo", str(Path("D:/work/demo").resolve()), "2026-01-01T00:00:00+00:00"),
+        )
+        old_conn.commit()
+        old_conn.close()
+
+        upgraded = DevLogDB(v1_path)
+        try:
+            self.assertEqual(upgraded.schema_version, 2)
+            same_id = upgraded.register_project("renamed", "D:/work/demo")
+            self.assertEqual(same_id, 1)
+            draft_id = upgraded.save_review_draft(1, make_sample_draft())
+            self.assertGreater(draft_id, 0)
+        finally:
+            upgraded.close()
+
+    def test_save_and_load_review_draft_roundtrip(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft = make_sample_draft()
+
+        draft_id = self.db.save_review_draft(project_id, draft)
+        record = self.db.load_review_draft(draft_id)
+
+        self.assertEqual(record.project_name, "demo")
+        self.assertEqual(record.draft.range_start, at(1))
+        self.assertEqual(record.draft.range_end, at(3))
+        self.assertEqual(record.draft.questions, draft.questions)
+        self.assertEqual(len(record.draft.claims), 2)
+        self.assertEqual(record.draft.claims[0].status, ClaimStatus.FACT)
+        self.assertEqual(record.draft.claims[1].status, ClaimStatus.AI_PENDING)
+        self.assertGreater(len(record.draft.claims[1].sources), 0)
+
+        summaries = self.db.list_review_drafts(project_id)
+        self.assertEqual(len(summaries), 1)
+        self.assertEqual(summaries[0].draft_id, draft_id)
+        self.assertEqual(summaries[0].total_claims, 2)
+        self.assertEqual(summaries[0].ai_pending_claims, 1)
+        self.assertEqual(summaries[0].confirmed_claims, 0)
+
+    def test_confirm_claim_transitions_and_keeps_facts(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+        record = self.db.load_review_draft(draft_id)
+
+        # Recover claim ids from the stored record wrapper.
+        fact_id = next(
+            item.id for item in record.stored_claims if item.claim.status == ClaimStatus.FACT
+        )
+        pending_id = next(
+            item.id
+            for item in record.stored_claims
+            if item.claim.status == ClaimStatus.AI_PENDING
+        )
+
+        self.assertFalse(self.db.confirm_review_claim(draft_id, fact_id))
+        self.assertTrue(
+            self.db.confirm_review_claim(draft_id, pending_id, note="人工复核通过")
+        )
+
+        reloaded = self.db.load_review_draft(draft_id)
+        status_by_id = {
+            item.id: (item.claim.status, item.claim.user_note)
+            for item in reloaded.stored_claims
+        }
+        self.assertEqual(status_by_id[fact_id][0], ClaimStatus.FACT)
+        self.assertEqual(status_by_id[pending_id][0], ClaimStatus.CONFIRMED)
+        self.assertEqual(status_by_id[pending_id][1], "人工复核通过")
+
+    def test_confirm_all_ai_claims(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+
+        changed = self.db.confirm_all_ai_claims(draft_id)
+        record = self.db.load_review_draft(draft_id)
+
+        self.assertEqual(changed, 1)
+        statuses = [item.claim.status for item in record.stored_claims]
+        self.assertEqual(statuses, [ClaimStatus.FACT, ClaimStatus.CONFIRMED])
+
+    def test_mark_draft_exported(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+
+        self.db.mark_draft_exported(draft_id, "D:/work/demo/docs/review.md")
+        record = self.db.load_review_draft(draft_id)
+
+        self.assertIsNotNone(record.exported_path)
+        self.assertIn("review.md", record.exported_path or "")
 
 
 if __name__ == "__main__":

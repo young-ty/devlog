@@ -1,22 +1,31 @@
-"""SQLite state store for DevLog projects and cached commit events.
+"""SQLite state store for DevLog projects, events and review drafts.
 
 Design rules:
 - Git is the source of truth; this database is only a cache/state store.
 - The database lives outside scanned repositories (default ~/.devlog/).
 - Inserts are idempotent: the same (project_id, hash) is stored once.
+- Review drafts are work-in-progress state; only the exported Markdown
+  file enters the user's repository.
 - All user-supplied values go through parameterized queries.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from devlog.core.git_source.models import CommitEvent, NoiseType
+from devlog.core.review.models import (
+    ClaimStatus,
+    ReviewClaim,
+    ReviewDraft,
+)
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA_V1_STATEMENTS = [
     """
@@ -53,6 +62,38 @@ _SCHEMA_V1_STATEMENTS = [
     """,
 ]
 
+_SCHEMA_V2_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS review_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        range_start TEXT NOT NULL,
+        range_end TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        questions_json TEXT NOT NULL DEFAULT '[]',
+        exported_path TEXT,
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS review_claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        draft_id INTEGER NOT NULL,
+        position INTEGER NOT NULL,
+        section TEXT NOT NULL,
+        text TEXT NOT NULL,
+        sources_json TEXT NOT NULL,
+        status TEXT NOT NULL,
+        user_note TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (draft_id) REFERENCES review_drafts (id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_review_claims_draft
+        ON review_claims (draft_id, position)
+    """,
+]
+
 _COMMIT_COLUMNS = (
     "project_id, hash, short_hash, author_name, author_email, committed_at, "
     "message_subject, files_changed, insertions, deletions, parents_count, noise_type"
@@ -67,6 +108,43 @@ def default_db_path() -> Path:
     """Return the default local database location."""
 
     return Path.home() / ".devlog" / "devlog.db"
+
+
+@dataclass(frozen=True)
+class ReviewDraftSummary:
+    """Lightweight row used by `devlog review list`."""
+
+    draft_id: int
+    project_id: int
+    project_name: str
+    project_path: str
+    range_start: datetime
+    range_end: datetime
+    created_at: datetime
+    total_claims: int
+    ai_pending_claims: int
+    confirmed_claims: int
+
+
+@dataclass(frozen=True)
+class StoredReviewClaim:
+    """A persisted claim carrying its database id."""
+
+    id: int
+    claim: ReviewClaim
+
+
+@dataclass(frozen=True)
+class StoredReviewDraft:
+    """A persisted draft plus the project context needed to export it."""
+
+    draft_id: int
+    project_id: int
+    project_name: str
+    project_path: str
+    exported_path: str | None
+    draft: ReviewDraft
+    stored_claims: tuple[StoredReviewClaim, ...] = ()
 
 
 class DevLogDB:
@@ -114,6 +192,10 @@ class DevLogDB:
             # append their own migration steps here, never edit old ones.
             if current == 0:
                 for statement in _SCHEMA_V1_STATEMENTS:
+                    self._conn.execute(statement)
+            # Version 1 -> 2 adds review draft and claim tables.
+            if current < 2:
+                for statement in _SCHEMA_V2_STATEMENTS:
                     self._conn.execute(statement)
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
@@ -228,6 +310,187 @@ class DevLogDB:
             (project_id,),
         ).fetchone()
         return None if row is None else row[0]
+
+    # ------------------------------------------------------------------
+    # Review drafts
+    # ------------------------------------------------------------------
+
+    def save_review_draft(self, project_id: int, draft: ReviewDraft) -> int:
+        """Persist a generated draft with all claims; returns the draft id."""
+
+        row = self._conn.execute(
+            "SELECT id FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if row is None:
+            raise DatabaseError(f"project does not exist: {project_id}")
+
+        cursor = self._conn.execute(
+            "INSERT INTO review_drafts "
+            "(project_id, range_start, range_end, created_at, questions_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                project_id,
+                draft.range_start.isoformat(),
+                draft.range_end.isoformat(),
+                draft.generated_at.isoformat(),
+                json.dumps(draft.questions, ensure_ascii=False),
+            ),
+        )
+        draft_id = int(cursor.lastrowid)
+
+        for position, claim in enumerate(draft.claims):
+            self._conn.execute(
+                "INSERT INTO review_claims "
+                "(draft_id, position, section, text, sources_json, status, user_note) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    draft_id,
+                    position,
+                    claim.section,
+                    claim.text,
+                    json.dumps(list(claim.sources)),
+                    claim.status.value,
+                    claim.user_note,
+                ),
+            )
+        self._conn.commit()
+        return draft_id
+
+    def list_review_drafts(
+        self, project_id: int | None = None
+    ) -> list[ReviewDraftSummary]:
+        """Return draft summaries, newest first, for one project or all."""
+
+        if project_id is None:
+            rows = self._conn.execute(
+                "SELECT id FROM review_drafts ORDER BY id DESC"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT id FROM review_drafts WHERE project_id = ? ORDER BY id DESC",
+                (project_id,),
+            ).fetchall()
+
+        records = [self.load_review_draft(int(row[0])) for row in rows]
+        return [self._summarize_draft(record) for record in records]
+
+    def load_review_draft(self, draft_id: int) -> StoredReviewDraft:
+        """Load one draft with project context and ordered claims."""
+
+        row = self._conn.execute(
+            "SELECT d.id, d.project_id, p.name, p.path, "
+            "d.range_start, d.range_end, d.created_at, "
+            "d.questions_json, d.exported_path "
+            "FROM review_drafts d "
+            "JOIN projects p ON p.id = d.project_id "
+            "WHERE d.id = ?",
+            (draft_id,),
+        ).fetchone()
+        if row is None:
+            raise DatabaseError(f"review draft not found: {draft_id}")
+
+        claims: list[StoredReviewClaim] = []
+        for claim_id, section, text, sources_json, status, user_note in self._conn.execute(
+            "SELECT id, section, text, sources_json, status, user_note "
+            "FROM review_claims WHERE draft_id = ? ORDER BY position",
+            (draft_id,),
+        ):
+            claims.append(
+                StoredReviewClaim(
+                    id=int(claim_id),
+                    claim=ReviewClaim(
+                        section=section,
+                        text=text,
+                        sources=tuple(json.loads(sources_json)),
+                        status=ClaimStatus(status),
+                        user_note=user_note,
+                    ),
+                )
+            )
+
+        created_at = datetime.fromisoformat(row[6])
+        draft = ReviewDraft(
+            project_name=row[2],
+            range_start=datetime.fromisoformat(row[4]),
+            range_end=datetime.fromisoformat(row[5]),
+            claims=[item.claim for item in claims],
+            questions=json.loads(row[7] or "[]"),
+            generated_at=created_at,
+        )
+        return StoredReviewDraft(
+            draft_id=draft_id,
+            project_id=int(row[1]),
+            project_name=row[2],
+            project_path=row[3],
+            exported_path=row[8],
+            draft=draft,
+            stored_claims=tuple(claims),
+        )
+
+    def confirm_review_claim(
+        self,
+        draft_id: int,
+        claim_id: int,
+        note: str | None = None,
+    ) -> bool:
+        """Mark one ai_pending claim as confirmed. Facts cannot be changed."""
+
+        sql = "UPDATE review_claims SET status = 'confirmed'"
+        params: list[object] = []
+        if note is not None:
+            sql += ", user_note = ?"
+            params.append(note)
+        sql += " WHERE id = ? AND draft_id = ? AND status = 'ai_pending'"
+        params.extend([claim_id, draft_id])
+
+        cursor = self._conn.execute(sql, params)
+        self._conn.commit()
+        return cursor.rowcount == 1
+
+    def confirm_all_ai_claims(self, draft_id: int) -> int:
+        """Confirm every ai_pending claim in a draft."""
+
+        cursor = self._conn.execute(
+            "UPDATE review_claims SET status = 'confirmed' "
+            "WHERE draft_id = ? AND status = 'ai_pending'",
+            (draft_id,),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def mark_draft_exported(self, draft_id: int, path: str | Path) -> None:
+        """Remember where the draft was last exported."""
+
+        self._conn.execute(
+            "UPDATE review_drafts SET exported_path = ? WHERE id = ?",
+            (str(Path(path).resolve()), draft_id),
+        )
+        self._conn.commit()
+
+    @staticmethod
+    def _summarize_draft(record: StoredReviewDraft) -> ReviewDraftSummary:
+        pending = sum(
+            1
+            for item in record.draft.claims
+            if item.status == ClaimStatus.AI_PENDING
+        )
+        confirmed = sum(
+            1
+            for item in record.draft.claims
+            if item.status == ClaimStatus.CONFIRMED
+        )
+        return ReviewDraftSummary(
+            draft_id=record.draft_id,
+            project_id=record.project_id,
+            project_name=record.project_name,
+            project_path=record.project_path,
+            range_start=record.draft.range_start,
+            range_end=record.draft.range_end,
+            created_at=record.draft.generated_at,
+            total_claims=len(record.draft.claims),
+            ai_pending_claims=pending,
+            confirmed_claims=confirmed,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

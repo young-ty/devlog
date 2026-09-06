@@ -33,12 +33,17 @@ def build_review_draft(
     themes: list[Theme],
     theme_summaries: list[ThemeSummary],
     silence_periods: list[SilencePeriod],
+    factual_summaries: bool = False,
 ) -> ReviewDraft:
     """Build a structured draft from facts and AI summaries.
 
     AI-produced content is always marked ai_pending. Sections whose answers
     only the developer knows (decisions, lessons, assets, next steps) get
     guided questions instead of fabricated statements.
+
+    factual_summaries=True marks theme summaries as facts, which is used
+    by the offline CLI mode where summaries are derived from commit data
+    by rules instead of by an LLM.
     """
 
     if len(theme_summaries) != len(themes):
@@ -80,7 +85,11 @@ def build_review_draft(
                 section=SECTION_TIMELINE,
                 text=f"主题「{summary.title}」：{summary.summary}",
                 sources=tuple(summary_sources),
-                status=ClaimStatus.AI_PENDING,
+                status=(
+                    ClaimStatus.FACT
+                    if factual_summaries
+                    else ClaimStatus.AI_PENDING
+                ),
             )
         )
 
