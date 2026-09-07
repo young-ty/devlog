@@ -1,0 +1,177 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  line-height: 1.6;
+}
+
+body {
+  margin: 0;
+  background: #f5f6f8;
+  color: #1f2430;
+}
+
+.container {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+.card,
+.section {
+  background: #fff;
+  border: 1px solid #e3e6ec;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  background: #2563eb;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.link-button {
+  background: transparent;
+  color: #2563eb;
+  padding: 4px 0;
+  margin-bottom: 8px;
+}
+
+input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid #cfd4de;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.project-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  color: #1f2430;
+  border: 1px solid #e3e6ec;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.project-row:hover {
+  border-color: #2563eb;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.error {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.success {
+  color: #067647;
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.claim {
+  border: 1px solid #e3e6ec;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.claim-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.claim-section {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.claim-text {
+  margin: 6px 0;
+}
+
+.claim-sources {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.claim-sources code {
+  background: #eef1f5;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 4px;
+}
+
+.confirm-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+.badge-fact {
+  background: #e7f6ec;
+  color: #067647;
+}
+
+.badge-ai_pending {
+  background: #fff4e5;
+  color: #b54708;
+}
+
+.badge-confirmed {
+  background: #e0eaff;
+  color: #175cd3;
+}
+
+.badge-edited {
+  background: #f0f1f3;
+  color: #475467;
+}

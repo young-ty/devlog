@@ -13,3 +13,7 @@ devlog.db
 Thumbs.db
 .idea/
 .vscode/
+
+# Web frontend
+devlog/web/node_modules/
+devlog/web/dist/

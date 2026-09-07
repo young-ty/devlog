@@ -103,6 +103,11 @@ MVP CLI（模块六，`python -m devlog`）：
 > 让 `python -m devlog` 开箱即用。解析层是薄壳，未来引入 Typer 只改
 > `cli/main.py`，不影响 runner 与核心模块。
 
+前端落地（模块八）：React + TypeScript + Vite，代码位于 `devlog/web/`；
+开发时 Vite 把 `/api` 代理到 `http://127.0.0.1:8000`，浏览器不直接跨源。
+MVP 只有三个页面（项目列表 / 项目详情 / 复盘编辑器），页面切换由
+`App.tsx` 状态完成，暂不引入 React Router 与 Redux。
+
 ## 5. 核心数据模型（初版）
 
 ### projects
