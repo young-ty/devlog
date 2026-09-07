@@ -2,6 +2,7 @@
 
 from devlog.core.storage.database import (
     DevLogDB,
+    ProjectSummary,
     ReviewDraftSummary,
     StoredReviewClaim,
     StoredReviewDraft,
@@ -10,6 +11,7 @@ from devlog.core.storage.database import (
 
 __all__ = [
     "DevLogDB",
+    "ProjectSummary",
     "ReviewDraftSummary",
     "StoredReviewClaim",
     "StoredReviewDraft",

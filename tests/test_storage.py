@@ -21,7 +21,7 @@ from devlog.core.review.models import (
     ReviewDraft,
 )
 from devlog.core.storage import database as database_module
-from devlog.core.storage.database import DevLogDB
+from devlog.core.storage.database import DatabaseError, DevLogDB
 
 
 TZ = timezone(timedelta(hours=8))
@@ -102,6 +102,21 @@ class DevLogDBTests(unittest.TestCase):
 
         again = self.db.register_project("demo-again", "D:/work/demo")
         self.assertEqual(again, project_id)
+
+    def test_list_and_get_project(self) -> None:
+        self.assertEqual(self.db.list_projects(), [])
+
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        projects = self.db.list_projects()
+        self.assertEqual(len(projects), 1)
+        self.assertEqual(projects[0].project_id, project_id)
+        self.assertEqual(projects[0].name, "demo")
+        self.assertEqual(projects[0].path, str(Path("D:/work/demo").resolve()))
+
+        loaded = self.db.get_project(project_id)
+        self.assertEqual(loaded.name, "demo")
+        with self.assertRaises(DatabaseError):
+            self.db.get_project(999)
 
     def test_save_and_list_roundtrip(self) -> None:
         project_id = self.db.register_project("demo", "D:/work/demo")

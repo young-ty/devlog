@@ -94,16 +94,20 @@ def _assert_git_repo(repo: Path) -> None:
         raise CLIUsageError(f"不是 Git 仓库：{repo}（请先执行 git init）")
 
 
-def cmd_init(db: DevLogDB, path: str | Path | None) -> InitResult:
+def cmd_init(
+    db: DevLogDB,
+    path: str | Path | None,
+    name: str | None = None,
+) -> InitResult:
     """Register a repository; registering the same path twice is a no-op."""
 
     repo = _resolve(path)
     _assert_git_repo(repo)
-    name = repo.name or "project"
-    project_id = db.register_project(name, repo)
+    project_name = name or repo.name or "project"
+    project_id = db.register_project(project_name, repo)
     return InitResult(
         project_id=project_id,
-        project_name=name,
+        project_name=project_name,
         project_path=str(repo),
     )
 
@@ -119,6 +123,7 @@ def cmd_scan(
     _assert_git_repo(repo)
     name = repo.name or "project"
     project_id = db.register_project(name, repo)
+    project_name = db.get_project(project_id).name
 
     events = scan_repository(repo)
     if reset:
@@ -129,7 +134,7 @@ def cmd_scan(
 
     return ScanResult(
         project_id=project_id,
-        project_name=name,
+        project_name=project_name,
         project_path=str(repo),
         total_events=len(events),
         inserted_events=inserted,
@@ -167,6 +172,7 @@ def cmd_review_generate(
     _assert_git_repo(repo)
     name = repo.name or "project"
     project_id = db.register_project(name, repo)
+    project_name = db.get_project(project_id).name
 
     events = db.list_events(project_id, since=since, until=until)
     if not events:
@@ -181,7 +187,7 @@ def cmd_review_generate(
     if offline:
         summaries = [_rule_based_summary(theme) for theme in cluster.themes]
         draft = build_review_draft(
-            project_name=name,
+            project_name=project_name,
             range_start=range_start,
             range_end=range_end,
             events=events,
@@ -200,7 +206,7 @@ def cmd_review_generate(
             ]
             summaries.append(summarize_theme(theme, theme_events, client))
         draft = build_review_draft(
-            project_name=name,
+            project_name=project_name,
             range_start=range_start,
             range_end=range_end,
             events=events,
@@ -216,7 +222,7 @@ def cmd_review_generate(
     )
     return GenerateResult(
         draft_id=draft_id,
-        project_name=name,
+        project_name=project_name,
         project_path=str(repo),
         range_start=range_start,
         range_end=range_end,

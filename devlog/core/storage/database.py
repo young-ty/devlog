@@ -111,6 +111,17 @@ def default_db_path() -> Path:
 
 
 @dataclass(frozen=True)
+class ProjectSummary:
+    """One registered project row, used by the API and CLI listing."""
+
+    project_id: int
+    name: str
+    path: str
+    created_at: datetime
+    last_scanned_commit: str | None
+
+
+@dataclass(frozen=True)
 class ReviewDraftSummary:
     """Lightweight row used by `devlog review list`."""
 
@@ -221,6 +232,42 @@ class DevLogDB:
         )
         self._conn.commit()
         return int(cursor.lastrowid)
+
+    def list_projects(self) -> list[ProjectSummary]:
+        """Return all registered projects, oldest first."""
+
+        rows = self._conn.execute(
+            "SELECT id, name, path, created_at, last_scanned_commit "
+            "FROM projects ORDER BY id"
+        ).fetchall()
+        return [
+            ProjectSummary(
+                project_id=int(row[0]),
+                name=row[1],
+                path=row[2],
+                created_at=datetime.fromisoformat(row[3]),
+                last_scanned_commit=row[4],
+            )
+            for row in rows
+        ]
+
+    def get_project(self, project_id: int) -> ProjectSummary:
+        """Return one project by id, or raise a friendly DatabaseError."""
+
+        row = self._conn.execute(
+            "SELECT id, name, path, created_at, last_scanned_commit "
+            "FROM projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+        if row is None:
+            raise DatabaseError(f"project not found: {project_id}")
+        return ProjectSummary(
+            project_id=int(row[0]),
+            name=row[1],
+            path=row[2],
+            created_at=datetime.fromisoformat(row[3]),
+            last_scanned_commit=row[4],
+        )
 
     # ------------------------------------------------------------------
     # Commits
