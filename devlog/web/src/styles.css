@@ -708,6 +708,18 @@ button.item-card:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.commit-subject-zh {
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.commit-original {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .commit-stats {
   margin-left: auto;
   display: inline-flex;

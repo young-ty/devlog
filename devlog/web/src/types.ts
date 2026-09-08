@@ -37,6 +37,7 @@ export interface TimelineCommit {
   deletions: number;
   parents_count: number;
   noise_type: NoiseType;
+  translated_subject: string | null;
 }
 
 export interface TimelineTheme {
@@ -65,6 +66,20 @@ export interface ProjectTimeline {
   commits: TimelineCommit[];
   themes: TimelineTheme[];
   silence_periods: TimelineSilencePeriod[];
+}
+
+export interface TranslationResult {
+  project_id: number;
+  project_name: string;
+  project_path: string;
+  translated_count: number;
+  remaining_count: number;
+}
+
+export interface LLMConfig {
+  configured: boolean;
+  model: string;
+  base_url: string;
 }
 
 export interface GenerateResult {

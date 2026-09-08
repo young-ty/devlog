@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { generateReview, listReviews, scanProject } from "../api";
+import {
+  generateReview,
+  getLLMConfig,
+  listReviews,
+  scanProject,
+} from "../api";
 import type { ReviewSummary } from "../types";
 import { formatDateTime, formatRange } from "../utils";
 
@@ -26,6 +31,7 @@ export function ProjectPage({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [llmReady, setLLMReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +58,24 @@ export function ProjectPage({
     };
   }, [projectId, reloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    getLLMConfig()
+      .then((config) => {
+        if (!cancelled) {
+          setLLMReady(config.configured);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLLMReady(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   async function handleScan(reset: boolean) {
     setBusy(true);
     setError("");
@@ -77,6 +101,23 @@ export function ProjectPage({
       const result = await generateReview(projectId, true);
       setSuccess(
         `已生成草稿 #${result.draft_id}（离线模式）：${result.claim_count} 条论断、${result.question_count} 个引导问题`,
+      );
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGenerateOnline() {
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await generateReview(projectId, false);
+      setSuccess(
+        `已生成 AI 草稿 #${result.draft_id}（中文摘要）：${result.claim_count} 条论断、${result.question_count} 个引导问题`,
       );
       setReloadKey((key) => key + 1);
     } catch (err) {
@@ -155,13 +196,29 @@ export function ProjectPage({
             查看开发时间线
           </button>
           <button
+            disabled={busy || llmReady === false}
+            onClick={handleGenerateOnline}
+          >
+            {llmReady === null
+              ? "检测 AI 配置…"
+              : llmReady
+                ? "生成中文复盘（AI）"
+                : "AI 未配置"}
+          </button>
+          <button
             className="secondary"
             disabled={busy}
             onClick={handleGenerate}
           >
-            生成复盘草稿（离线）
+            生成快速骨架（离线）
           </button>
         </div>
+        {llmReady === false && (
+          <p className="panel-hint" style={{ marginTop: 12 }}>
+            AI 模式需要 DeepSeek key：在 ~/.devlog/config.toml 中填写
+            api_key（或设置环境变量 DEEPSEEK_API_KEY）。
+          </p>
+        )}
       </section>
 
       <section className="section">
@@ -184,7 +241,7 @@ export function ProjectPage({
         {!loading && reviews.length === 0 && (
           <div className="empty">
             <strong>还没有复盘草稿</strong>
-            先扫描仓库，再点击“生成复盘草稿（离线）”，几分钟内得到第一版草稿。
+            先扫描仓库，再点击“生成快速骨架（离线）”或“生成中文复盘（AI）”。
           </div>
         )}
 

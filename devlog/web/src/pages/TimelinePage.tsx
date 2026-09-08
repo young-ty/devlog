@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { getProjectTimeline } from "../api";
+import {
+  getLLMConfig,
+  getProjectTimeline,
+  translateProjectCommits,
+} from "../api";
 import type {
   ProjectTimeline,
   TimelineCommit,
@@ -40,6 +44,10 @@ function noiseLabel(type: string): string {
   return NOISE_LABELS[type] ?? "噪音提交";
 }
 
+function themeNumber(theme: TimelineTheme): string {
+  return theme.id.split("-").pop() ?? theme.id;
+}
+
 export function TimelinePage({
   projectId,
   projectName,
@@ -48,8 +56,30 @@ export function TimelinePage({
 }: TimelinePageProps) {
   const [timeline, setTimeline] = useState<ProjectTimeline | null>(null);
   const [loading, setLoading] = useState(true);
+  const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [showNoise, setShowNoise] = useState(false);
+  const [llmReady, setLLMReady] = useState<boolean | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    getLLMConfig()
+      .then((config) => {
+        if (!cancelled) {
+          setLLMReady(config.configured);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLLMReady(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +104,32 @@ export function TimelinePage({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, reloadKey]);
+
+  async function handleTranslate() {
+    setTranslating(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await translateProjectCommits(projectId);
+      if (result.translated_count > 0) {
+        setSuccess(
+          `已翻译 ${result.translated_count} 条提交信息。`,
+        );
+      } else if (result.remaining_count > 0) {
+        setSuccess(
+          `本次翻译 ${result.translated_count} 条，还有 ${result.remaining_count} 条可稍后重试。`,
+        );
+      } else {
+        setSuccess("所有提交都已经翻译成中文了。");
+      }
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -103,6 +158,9 @@ export function TimelinePage({
   const milestoneCount = timeline.themes.filter(
     (theme) => theme.is_milestone_candidate,
   ).length;
+  const translatedCount = timeline.commits.filter(
+    (item) => item.translated_subject !== null,
+  ).length;
   const visibleCommits = timeline.commits.filter(
     (item) => showNoise || item.noise_type === "none",
   );
@@ -115,6 +173,7 @@ export function TimelinePage({
   }
 
   function renderCommitRow(commit: TimelineCommit, isNoise: boolean) {
+    const translated = commit.translated_subject?.trim();
     return (
       <div
         key={commit.hash}
@@ -129,12 +188,23 @@ export function TimelinePage({
             </span>
           )}
           <span className="commit-stats">
-            <span className="commit-files">{commit.files_changed} files</span>
+            <span className="commit-files">{commit.files_changed} 个文件</span>
             <span className="commit-add">+{commit.insertions}</span>
             <span className="commit-del">-{commit.deletions}</span>
           </span>
         </div>
-        <div className="commit-subject">{commit.message_subject}</div>
+        {translated ? (
+          <>
+            <div className="commit-subject commit-subject-zh">
+              {translated}
+            </div>
+            <div className="commit-original">
+              原文：{commit.message_subject}
+            </div>
+          </>
+        ) : (
+          <div className="commit-subject">{commit.message_subject}</div>
+        )}
       </div>
     );
   }
@@ -153,6 +223,7 @@ export function TimelinePage({
       </div>
 
       {error && <p className="message error">{error}</p>}
+      {success && <p className="message success">{success}</p>}
 
       <div className="stat-grid">
         <div className="stat-card">
@@ -160,12 +231,12 @@ export function TimelinePage({
           <div className="stat-value">{timeline.commits.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">开发主题</div>
-          <div className="stat-value accent">{timeline.themes.length}</div>
+          <div className="stat-label">已翻译为中文</div>
+          <div className="stat-value accent">{translatedCount}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">里程碑候选</div>
-          <div className="stat-value success">{milestoneCount}</div>
+          <div className="stat-label">开发主题</div>
+          <div className="stat-value">{timeline.themes.length}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">静默期</div>
@@ -182,11 +253,47 @@ export function TimelinePage({
         </div>
       ) : (
         <>
+          <section className="panel">
+            <div className="panel-head">
+              <h2>中文阅读模式</h2>
+              <span className="panel-hint">
+                原始英文信息始终保留，翻译结果只用于阅读
+              </span>
+            </div>
+            <div className="actions">
+              <button
+                disabled={
+                  translating ||
+                  llmReady === false ||
+                  translatedCount === timeline.commits.length
+                }
+                onClick={handleTranslate}
+              >
+                {translating
+                  ? "翻译中…"
+                  : llmReady === null
+                    ? "检测 AI 配置…"
+                    : llmReady
+                      ? `翻译剩余提交（${timeline.commits.length - translatedCount}）`
+                      : "AI 未配置"}
+              </button>
+            </div>
+            {llmReady === false && (
+              <p className="panel-hint" style={{ marginTop: 12 }}>
+                配置 ~/.devlog/config.toml 中的 DeepSeek api_key
+                后即可一键翻译全部提交。
+              </p>
+            )}
+          </section>
+
           <section className="section">
             <div className="panel-head">
               <h2>主题分组</h2>
               <span className="panel-hint">
                 按提交信息自动聚类 · 共 {themes.length} 个主题
+                {milestoneCount > 0
+                  ? ` · ${milestoneCount} 个里程碑候选`
+                  : ""}
               </span>
             </div>
 
@@ -204,7 +311,9 @@ export function TimelinePage({
                     {kindLabel(theme.kind)}
                   </span>
                   <div className="theme-main">
-                    <div className="theme-title">{theme.title}</div>
+                    <div className="theme-title">
+                      开发主题 {themeNumber(theme)}
+                    </div>
                     <div className="theme-meta">
                       {theme.commit_count} 个提交 ·{" "}
                       {formatRange(theme.started_at, theme.ended_at)}

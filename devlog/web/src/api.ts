@@ -3,11 +3,13 @@ import type {
   ExportResult,
   GenerateResult,
   InitResult,
+  LLMConfig,
   Project,
   ProjectTimeline,
   ReviewDraft,
   ReviewSummary,
   ScanResult,
+  TranslationResult,
 } from "./types";
 
 class ApiError extends Error {
@@ -73,6 +75,19 @@ export function getProjectTimeline(
 ): Promise<ProjectTimeline> {
   return request<ProjectTimeline>(
     `/api/projects/${projectId}/timeline`,
+  );
+}
+
+export function getLLMConfig(): Promise<LLMConfig> {
+  return request<LLMConfig>("/api/llm/config");
+}
+
+export function translateProjectCommits(
+  projectId: number,
+): Promise<TranslationResult> {
+  return request<TranslationResult>(
+    `/api/projects/${projectId}/translations`,
+    jsonInit("POST", {}),
   );
 }
 
