@@ -17,7 +17,7 @@ from typing import Any
 from devlog.core.llm.base import LLMClientBase, LLMError
 
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_TIMEOUT_SECONDS = 60
 NETWORK_RETRY_ATTEMPTS = 3

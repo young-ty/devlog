@@ -74,7 +74,7 @@ pnpm dev
 
 ```toml
 api_key = "sk-你的密钥"
-model = "deepseek-chat"
+model = "deepseek-v4-flash"
 ```
 
 也可以设置环境变量 `DEEPSEEK_API_KEY`。密钥始终保存在 `~/.devlog/`，不会进入任何 Git 仓库。

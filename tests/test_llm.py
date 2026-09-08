@@ -14,7 +14,7 @@ from pathlib import Path
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.base import LLMClientBase, LLMError
 from devlog.core.llm.chunking import chunk_texts, summarize_texts_in_chunks
-from devlog.core.llm.deepseek import DeepSeekClient, load_local_config
+from devlog.core.llm.deepseek import DEFAULT_MODEL, DeepSeekClient, load_local_config
 from devlog.core.llm.themes import (
     ThemeSummary,
     complete_json_with_retry,
@@ -167,16 +167,19 @@ class ThemeSummaryTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_default_model_is_deepseek_v4_flash(self) -> None:
+        self.assertEqual(DEFAULT_MODEL, "deepseek-v4-flash")
+
     def test_load_local_config_parses_key_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
             path.write_text(
-                '# comment\napi_key = "sk-test"\nmodel = "deepseek-chat"\n',
+                '# comment\napi_key = "sk-test"\nmodel = "deepseek-v4-flash"\n',
                 encoding="utf-8",
             )
             config = load_local_config(path)
         self.assertEqual(config["api_key"], "sk-test")
-        self.assertEqual(config["model"], "deepseek-chat")
+        self.assertEqual(config["model"], "deepseek-v4-flash")
 
     def test_deepseek_client_reads_model_and_base_url_from_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
