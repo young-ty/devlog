@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import io
+import subprocess
+import sys
 import tomllib
 import unittest
 from pathlib import Path
@@ -83,6 +85,24 @@ class ServeCommandTests(unittest.TestCase):
         self.assertEqual(captured["app"], "fake-app")
         self.assertEqual(captured["host"], "0.0.0.0")
         self.assertEqual(captured["port"], 9000)
+
+    def test_fresh_server_app_import_has_no_circular_import(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import devlog.server.app; print('server-ok')",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("server-ok", output)
 
 
 class ReadmeTests(unittest.TestCase):
