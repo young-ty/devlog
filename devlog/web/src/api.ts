@@ -4,6 +4,7 @@ import type {
   GenerateResult,
   InitResult,
   Project,
+  ProjectTimeline,
   ReviewDraft,
   ReviewSummary,
   ScanResult,
@@ -64,6 +65,14 @@ export function scanProject(
   return request<ScanResult>(
     `/api/projects/${projectId}/scan`,
     jsonInit("POST", { reset }),
+  );
+}
+
+export function getProjectTimeline(
+  projectId: number,
+): Promise<ProjectTimeline> {
+  return request<ProjectTimeline>(
+    `/api/projects/${projectId}/timeline`,
   );
 }
 

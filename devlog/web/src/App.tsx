@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ReviewPage } from "./pages/ReviewPage";
+import { TimelinePage } from "./pages/TimelinePage";
 
 type View =
   | { name: "projects" }
@@ -14,6 +15,12 @@ type View =
   | {
       name: "review";
       draftId: number;
+      projectId: number;
+      projectName: string;
+      projectPath: string;
+    }
+  | {
+      name: "timeline";
       projectId: number;
       projectName: string;
       projectPath: string;
@@ -63,10 +70,34 @@ export default function App() {
         projectName={view.projectName}
         projectPath={view.projectPath}
         onBack={() => setView({ name: "projects" })}
+        onOpenTimeline={() =>
+          setView({
+            name: "timeline",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
         onOpenReview={(draftId) =>
           setView({
             name: "review",
             draftId,
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
+      />
+    );
+  } else if (view.name === "timeline") {
+    page = (
+      <TimelinePage
+        projectId={view.projectId}
+        projectName={view.projectName}
+        projectPath={view.projectPath}
+        onBack={() =>
+          setView({
+            name: "project",
             projectId: view.projectId,
             projectName: view.projectName,
             projectPath: view.projectPath,

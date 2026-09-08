@@ -165,6 +165,9 @@ class APIFlowTests(unittest.TestCase):
             response = client.get("/api/projects/999/reviews")
             self.assertEqual(response.status_code, 404)
 
+            response = client.get("/api/projects/999/timeline")
+            self.assertEqual(response.status_code, 404)
+
             response = client.get("/api/reviews/999")
             self.assertEqual(response.status_code, 404)
 
@@ -187,6 +190,62 @@ class APIFlowTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 400)
             self.assertIn("scan", response.json()["detail"])
+
+    def test_timeline_returns_commits_themes_and_silence(self) -> None:
+        commit(self.repo, "wip.txt", "scratch\n", "wip: scratch notes", at(8))
+        commit(
+            self.repo,
+            "dashboard.py",
+            "def dashboard(): ...\n",
+            "feat: add dashboard page",
+            at(9),
+        )
+
+        with TestClient(self.app) as client:
+            response = client.post(
+                "/api/projects",
+                json={"path": str(self.repo)},
+            )
+            project_id = response.json()["project_id"]
+            response = client.post(
+                f"/api/projects/{project_id}/scan",
+                json={},
+            )
+            self.assertEqual(response.status_code, 200)
+
+            response = client.get(
+                f"/api/projects/{project_id}/timeline"
+            )
+            self.assertEqual(response.status_code, 200)
+            timeline = response.json()
+
+            self.assertEqual(timeline["project_name"], "repo")
+            self.assertEqual(len(timeline["commits"]), 4)
+            self.assertEqual(len(timeline["themes"]), 2)
+            self.assertEqual(len(timeline["silence_periods"]), 1)
+
+            messages = [
+                commit_item["message_subject"]
+                for commit_item in timeline["commits"]
+            ]
+            self.assertIn("wip: scratch notes", messages)
+
+            noise_commit = next(
+                item
+                for item in timeline["commits"]
+                if item["message_subject"] == "wip: scratch notes"
+            )
+            self.assertEqual(noise_commit["noise_type"], "wip")
+
+            login_theme = next(
+                theme
+                for theme in timeline["themes"]
+                if theme["commit_count"] == 2
+            )
+            self.assertEqual(len(login_theme["commit_hashes"]), 2)
+
+            silence = timeline["silence_periods"][0]
+            self.assertGreaterEqual(silence["days"], 3)
 
     def test_create_project_rejects_non_git_path(self) -> None:
         plain = self.root / "plain"

@@ -23,6 +23,50 @@ export interface ScanResult {
   reset: boolean;
 }
 
+export type NoiseType = "none" | "merge" | "revert" | "wip" | "chore";
+
+export interface TimelineCommit {
+  hash: string;
+  short_hash: string;
+  author_name: string;
+  author_email: string;
+  committed_at: string;
+  message_subject: string;
+  files_changed: number;
+  insertions: number;
+  deletions: number;
+  parents_count: number;
+  noise_type: NoiseType;
+}
+
+export interface TimelineTheme {
+  id: string;
+  title: string;
+  kind: string;
+  commit_hashes: string[];
+  started_at: string;
+  ended_at: string;
+  commit_count: number;
+  is_milestone_candidate: boolean;
+}
+
+export interface TimelineSilencePeriod {
+  started_at: string;
+  ended_at: string;
+  days: number;
+}
+
+export interface ProjectTimeline {
+  project_id: number;
+  project_name: string;
+  project_path: string;
+  range_start: string | null;
+  range_end: string | null;
+  commits: TimelineCommit[];
+  themes: TimelineTheme[];
+  silence_periods: TimelineSilencePeriod[];
+}
+
 export interface GenerateResult {
   draft_id: number;
   project_name: string;

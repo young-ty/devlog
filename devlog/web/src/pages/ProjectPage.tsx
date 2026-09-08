@@ -8,6 +8,7 @@ interface ProjectPageProps {
   projectName: string;
   projectPath: string;
   onBack: () => void;
+  onOpenTimeline: () => void;
   onOpenReview: (draftId: number) => void;
 }
 
@@ -16,6 +17,7 @@ export function ProjectPage({
   projectName,
   projectPath,
   onBack,
+  onOpenTimeline,
   onOpenReview,
 }: ProjectPageProps) {
   const [reviews, setReviews] = useState<ReviewSummary[]>([]);
@@ -144,6 +146,13 @@ export function ProjectPage({
             onClick={() => handleScan(true)}
           >
             重置并重扫
+          </button>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={onOpenTimeline}
+          >
+            查看开发时间线
           </button>
           <button
             className="secondary"

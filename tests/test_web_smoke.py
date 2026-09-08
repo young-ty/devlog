@@ -26,6 +26,7 @@ class WebSmokeTests(unittest.TestCase):
             "src/pages/ProjectsPage.tsx",
             "src/pages/ProjectPage.tsx",
             "src/pages/ReviewPage.tsx",
+            "src/pages/TimelinePage.tsx",
         ):
             self.assertTrue(
                 (WEB_DIR / relative).exists(),

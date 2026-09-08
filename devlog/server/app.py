@@ -83,6 +83,15 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         )
 
     @app.get(
+        "/api/projects/{project_id}/timeline",
+        response_model=schemas.TimelineResponse,
+    )
+    def project_timeline(project_id: int, db=Depends(get_db)):
+        return schemas.TimelineResponse.from_result(
+            runner.cmd_timeline(db, project_id)
+        )
+
+    @app.get(
         "/api/projects/{project_id}/reviews",
         response_model=list[schemas.ReviewSummaryResponse],
     )

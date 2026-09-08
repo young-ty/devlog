@@ -112,6 +112,85 @@ class ConfirmResponse(_FromAttributes):
     remaining_pending: int
 
 
+class TimelineCommitResponse(BaseModel):
+    hash: str
+    short_hash: str
+    author_name: str
+    author_email: str
+    committed_at: datetime
+    message_subject: str
+    files_changed: int
+    insertions: int
+    deletions: int
+    parents_count: int
+    noise_type: str
+
+
+class TimelineThemeResponse(BaseModel):
+    id: str
+    title: str
+    kind: str
+    commit_hashes: list[str]
+    started_at: datetime
+    ended_at: datetime
+    commit_count: int
+    is_milestone_candidate: bool
+
+
+class TimelineSilenceResponse(BaseModel):
+    started_at: datetime
+    ended_at: datetime
+    days: int
+
+
+class TimelineResponse(BaseModel):
+    project_id: int
+    project_name: str
+    project_path: str
+    range_start: datetime | None = None
+    range_end: datetime | None = None
+    commits: list[TimelineCommitResponse] = Field(default_factory=list)
+    themes: list[TimelineThemeResponse] = Field(default_factory=list)
+    silence_periods: list[TimelineSilenceResponse] = Field(
+        default_factory=list
+    )
+
+    @classmethod
+    def from_result(cls, result):
+        return cls(
+            project_id=result.project_id,
+            project_name=result.project_name,
+            project_path=result.project_path,
+            range_start=result.range_start,
+            range_end=result.range_end,
+            commits=[
+                TimelineCommitResponse(**event.to_dict())
+                for event in result.commits
+            ],
+            themes=[
+                TimelineThemeResponse(
+                    id=theme.id,
+                    title=theme.title,
+                    kind=theme.kind,
+                    commit_hashes=list(theme.commit_hashes),
+                    started_at=theme.started_at,
+                    ended_at=theme.ended_at,
+                    commit_count=theme.commit_count,
+                    is_milestone_candidate=theme.is_milestone_candidate,
+                )
+                for theme in result.themes
+            ],
+            silence_periods=[
+                TimelineSilenceResponse(
+                    started_at=period.started_at,
+                    ended_at=period.ended_at,
+                    days=period.days,
+                )
+                for period in result.silence_periods
+            ],
+        )
+
+
 class ExportRequest(BaseModel):
     output: str | None = None
 

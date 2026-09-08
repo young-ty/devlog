@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from devlog.core.git_source.scanner import GitSourceError, scan_repository
+from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.deepseek import DeepSeekClient
 from devlog.core.llm.themes import rule_based_summary, summarize_theme
 from devlog.core.review.engine import build_review_draft
@@ -25,6 +26,7 @@ from devlog.core.storage.database import (
     StoredReviewDraft,
 )
 from devlog.core.theming.cluster import cluster_themes
+from devlog.core.theming.models import SilencePeriod, Theme
 
 
 class CLIUsageError(ValueError):
@@ -66,6 +68,18 @@ class ConfirmResult:
     draft_id: int
     changed: int
     remaining_pending: int
+
+
+@dataclass(frozen=True)
+class TimelineResult:
+    project_id: int
+    project_name: str
+    project_path: str
+    range_start: datetime | None
+    range_end: datetime | None
+    commits: list[CommitEvent]
+    themes: list[Theme]
+    silence_periods: list[SilencePeriod]
 
 
 def _resolve(path: str | Path | None) -> Path:
@@ -226,6 +240,27 @@ def cmd_review_list(
         return summaries
     repo = _resolve(path)
     return [item for item in summaries if Path(item.project_path) == repo]
+
+
+def cmd_timeline(db: DevLogDB, project_id: int) -> TimelineResult:
+    """Return the cached commit timeline and its rule-based theme view."""
+
+    project = db.get_project(project_id)
+    events = db.list_events(project_id, include_noise=True)
+    content_events = [
+        event for event in events if event.noise_type == NoiseType.NONE
+    ]
+    cluster = cluster_themes(content_events)
+    return TimelineResult(
+        project_id=project.project_id,
+        project_name=project.name,
+        project_path=project.path,
+        range_start=events[0].committed_at if events else None,
+        range_end=events[-1].committed_at if events else None,
+        commits=events,
+        themes=cluster.themes,
+        silence_periods=cluster.silence_periods,
+    )
 
 
 def cmd_review_show(db: DevLogDB, draft_id: int) -> StoredReviewDraft:
