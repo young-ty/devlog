@@ -18,6 +18,7 @@ from devlog.cli import runner
 from devlog.cli.main import main as cli_main
 from devlog.core.review.models import (
     SECTION_OVERVIEW,
+    SECTION_TIMELINE,
     ClaimStatus,
     ReviewClaim,
     ReviewDraft,
@@ -164,6 +165,45 @@ class CLIFlowTests(unittest.TestCase):
             runner.cmd_init(db, self.repo)
             with self.assertRaises(runner.CLIUsageError):
                 runner.cmd_review_generate(db, self.repo, offline=True)
+
+    def test_online_generate_uses_provider_summaries(self) -> None:
+        with DevLogDB(self.db_path) as db:
+            runner.cmd_init(db, self.repo)
+            runner.cmd_scan(db, self.repo)
+
+            fake_client = mock.MagicMock()
+            fake_summary = mock.MagicMock()
+            fake_summary.title = "登录功能"
+            fake_summary.kind = "feature"
+            fake_summary.summary = "围绕登录页完成实现，并修复按钮问题。"
+            fake_summary.sources = ()
+
+            with mock.patch(
+                "devlog.cli.runner.DeepSeekClient", return_value=fake_client
+            ), mock.patch(
+                "devlog.cli.runner.summarize_theme",
+                return_value=fake_summary,
+            ):
+                result = runner.cmd_review_generate(
+                    db, self.repo, offline=False
+                )
+
+            self.assertFalse(result.offline)
+            self.assertGreater(result.claim_count, 0)
+            self.assertGreater(result.ai_pending_count, 0)
+
+            record = runner.cmd_review_show(db, result.draft_id)
+            timeline_claims = [
+                item.claim
+                for item in record.stored_claims
+                if item.claim.section == SECTION_TIMELINE
+            ]
+            self.assertTrue(
+                all(
+                    "登录功能" in claim.text
+                    for claim in timeline_claims
+                )
+            )
 
     def test_init_rejects_non_git_directory(self) -> None:
         plain = self.root / "plain"
