@@ -25,7 +25,7 @@ from devlog.core.storage.database import DatabaseError, DevLogDB
 
 
 TZ = timezone(timedelta(hours=8))
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def at(day: int) -> datetime:
@@ -197,7 +197,7 @@ class DevLogDBTests(unittest.TestCase):
         self.assertEqual(self.db.list_events(project_id, include_noise=True), [])
         self.assertEqual(self.db.get_scan_cursor(project_id), "a" * 40)
 
-    def test_v1_database_upgrades_to_v2_and_keeps_data(self) -> None:
+    def test_v1_database_upgrades_to_latest_and_keeps_data(self) -> None:
         v1_path = Path(self._tmp.name) / "v1.db"
         make_v1_database(v1_path)
 
@@ -211,13 +211,43 @@ class DevLogDBTests(unittest.TestCase):
 
         upgraded = DevLogDB(v1_path)
         try:
-            self.assertEqual(upgraded.schema_version, 2)
+            self.assertEqual(upgraded.schema_version, 3)
             same_id = upgraded.register_project("renamed", "D:/work/demo")
             self.assertEqual(same_id, 1)
             draft_id = upgraded.save_review_draft(1, make_sample_draft())
             self.assertGreater(draft_id, 0)
+            inserted = upgraded.save_commit_translations(
+                1, {f"{1:040d}": "新增登录页面"}
+            )
+            self.assertEqual(inserted, 1)
         finally:
             upgraded.close()
+
+    def test_commit_translation_cache_roundtrip(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        first_hash = f"{1:040d}"
+        second_hash = f"{2:040d}"
+
+        inserted = self.db.save_commit_translations(
+            project_id,
+            {first_hash: "新增登录页面", second_hash: "修复登录按钮"},
+        )
+        self.assertEqual(inserted, 2)
+
+        again = self.db.save_commit_translations(
+            project_id,
+            {first_hash: "不应覆盖旧翻译"},
+        )
+        self.assertEqual(again, 0)
+
+        all_items = self.db.list_commit_translations(project_id)
+        self.assertEqual(all_items[first_hash], "新增登录页面")
+        self.assertEqual(all_items[second_hash], "修复登录按钮")
+
+        filtered = self.db.list_commit_translations(
+            project_id, hashes=[first_hash]
+        )
+        self.assertEqual(set(filtered), {first_hash})
 
     def test_save_and_load_review_draft_roundtrip(self) -> None:
         project_id = self.db.register_project("demo", "D:/work/demo")

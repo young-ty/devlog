@@ -44,17 +44,30 @@ def load_local_config(config_path: str | Path | None = None) -> dict[str, str]:
     return config
 
 
+def llm_settings(config_path: str | Path | None = None) -> dict[str, str]:
+    """Return safe, non-secret LLM settings for the Web UI."""
+
+    config = load_local_config(config_path)
+    api_key = os.environ.get("DEEPSEEK_API_KEY") or config.get("api_key")
+    return {
+        "configured": "true" if api_key else "false",
+        "model": config.get("model") or DEFAULT_MODEL,
+        "base_url": config.get("base_url") or DEFAULT_BASE_URL,
+    }
+
+
 class DeepSeekClient(LLMClientBase):
     """Call DeepSeek's OpenAI-compatible chat completions API."""
 
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = DEFAULT_MODEL,
-        base_url: str = DEFAULT_BASE_URL,
+        model: str | None = None,
+        base_url: str | None = None,
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
+        config_path: str | Path | None = None,
     ) -> None:
-        config = load_local_config()
+        config = load_local_config(config_path)
         resolved_key = (
             api_key
             or os.environ.get("DEEPSEEK_API_KEY")
@@ -66,8 +79,9 @@ class DeepSeekClient(LLMClientBase):
                 "or create ~/.devlog/config.toml"
             )
         self.api_key = resolved_key
-        self.model = model
-        self.base_url = base_url.rstrip("/")
+        self.model = model or config.get("model") or DEFAULT_MODEL
+        raw_base_url = base_url or config.get("base_url") or DEFAULT_BASE_URL
+        self.base_url = raw_base_url.rstrip("/")
         self.timeout = timeout
 
     def complete(self, prompt: str) -> str:

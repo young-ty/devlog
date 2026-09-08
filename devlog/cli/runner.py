@@ -17,6 +17,7 @@ from devlog.core.git_source.scanner import GitSourceError, scan_repository
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.deepseek import DeepSeekClient
 from devlog.core.llm.themes import rule_based_summary, summarize_theme
+from devlog.core.llm.translation import translate_commit_subjects
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import write_markdown
 from devlog.core.review.models import ClaimStatus
@@ -80,6 +81,16 @@ class TimelineResult:
     commits: list[CommitEvent]
     themes: list[Theme]
     silence_periods: list[SilencePeriod]
+    translations: dict[str, str]
+
+
+@dataclass(frozen=True)
+class TranslationResult:
+    project_id: int
+    project_name: str
+    project_path: str
+    translated_count: int
+    remaining_count: int
 
 
 def _resolve(path: str | Path | None) -> Path:
@@ -251,6 +262,7 @@ def cmd_timeline(db: DevLogDB, project_id: int) -> TimelineResult:
         event for event in events if event.noise_type == NoiseType.NONE
     ]
     cluster = cluster_themes(content_events)
+    translations = db.list_commit_translations(project_id)
     return TimelineResult(
         project_id=project.project_id,
         project_name=project.name,
@@ -260,6 +272,47 @@ def cmd_timeline(db: DevLogDB, project_id: int) -> TimelineResult:
         commits=events,
         themes=cluster.themes,
         silence_periods=cluster.silence_periods,
+        translations=translations,
+    )
+
+
+def cmd_translate_commits(db: DevLogDB, project_id: int) -> TranslationResult:
+    """Translate untranslated cached commit subjects and cache them."""
+
+    project = db.get_project(project_id)
+    events = db.list_events(project_id, include_noise=True)
+    if not events:
+        return TranslationResult(
+            project_id=project_id,
+            project_name=project.name,
+            project_path=project.path,
+            translated_count=0,
+            remaining_count=0,
+        )
+
+    cached = db.list_commit_translations(project_id)
+    pending = [
+        (event.hash, event.message_subject)
+        for event in events
+        if event.hash not in cached
+    ]
+    if not pending:
+        return TranslationResult(
+            project_id=project_id,
+            project_name=project.name,
+            project_path=project.path,
+            translated_count=0,
+            remaining_count=0,
+        )
+
+    translated = translate_commit_subjects(DeepSeekClient(), pending)
+    inserted = db.save_commit_translations(project_id, translated)
+    return TranslationResult(
+        project_id=project_id,
+        project_name=project.name,
+        project_path=project.path,
+        translated_count=inserted,
+        remaining_count=len(pending) - len(translated),
     )
 
 

@@ -14,12 +14,13 @@ from pathlib import Path
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.base import LLMClientBase, LLMError
 from devlog.core.llm.chunking import chunk_texts, summarize_texts_in_chunks
-from devlog.core.llm.deepseek import load_local_config
+from devlog.core.llm.deepseek import DeepSeekClient, load_local_config
 from devlog.core.llm.themes import (
     ThemeSummary,
     complete_json_with_retry,
     summarize_theme,
 )
+from devlog.core.llm.translation import translate_commit_subjects
 from devlog.core.theming.models import Theme
 
 
@@ -50,6 +51,21 @@ class FakeClient(LLMClientBase):
             "kind": "feature",
             "summary": "Implemented the login feature.",
             "sources": [f"{i:040d}" for i in (1, 2)],
+        }
+
+
+class FakeTranslationClient(LLMClientBase):
+    def __init__(self) -> None:
+        self.json_prompts: list[str] = []
+
+    def complete(self, prompt: str) -> str:
+        return ""
+
+    def complete_json(self, prompt: str) -> dict:
+        self.json_prompts.append(prompt)
+        return {
+            f"{1:040d}": "新增登录页面",
+            f"{2:040d}": "修复登录按钮",
         }
 
 
@@ -161,6 +177,40 @@ class ConfigTests(unittest.TestCase):
             config = load_local_config(path)
         self.assertEqual(config["api_key"], "sk-test")
         self.assertEqual(config["model"], "deepseek-chat")
+
+    def test_deepseek_client_reads_model_and_base_url_from_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                'api_key = "sk-test"\n'
+                'model = "deepseek-coder"\n'
+                'base_url = "https://api.example.com/"\n',
+                encoding="utf-8",
+            )
+            client = DeepSeekClient(config_path=path)
+        self.assertEqual(client.model, "deepseek-coder")
+        self.assertEqual(client.base_url, "https://api.example.com")
+
+
+class TranslationTests(unittest.TestCase):
+    def test_translate_commit_subjects_returns_chinese_map(self) -> None:
+        client = FakeTranslationClient()
+        items = [
+            (f"{1:040d}", "feat: add login page"),
+            (f"{2:040d}", "fix: login button"),
+        ]
+
+        result = translate_commit_subjects(client, items)
+
+        self.assertEqual(result[f"{1:040d}"], "新增登录页面")
+        self.assertEqual(result[f"{2:040d}"], "修复登录按钮")
+        self.assertEqual(len(client.json_prompts), 1)
+        self.assertIn(f"{1:040d}", client.json_prompts[0])
+
+    def test_translate_commit_subjects_handles_empty_list(self) -> None:
+        client = FakeTranslationClient()
+        self.assertEqual(translate_commit_subjects(client, []), {})
+        self.assertEqual(client.json_prompts, [])
 
 
 if __name__ == "__main__":

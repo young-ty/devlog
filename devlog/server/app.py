@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from devlog.cli import runner
 from devlog.core.git_source.scanner import GitSourceError
+from devlog.core.llm.deepseek import llm_settings
 from devlog.core.llm.base import LLMError
 from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError, default_db_path
@@ -89,6 +90,27 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     def project_timeline(project_id: int, db=Depends(get_db)):
         return schemas.TimelineResponse.from_result(
             runner.cmd_timeline(db, project_id)
+        )
+
+    @app.post(
+        "/api/projects/{project_id}/translations",
+        response_model=schemas.TranslationResponse,
+    )
+    def translate_project_commits(project_id: int, db=Depends(get_db)):
+        return schemas.TranslationResponse.from_result(
+            runner.cmd_translate_commits(db, project_id)
+        )
+
+    @app.get(
+        "/api/llm/config",
+        response_model=schemas.LLMConfigResponse,
+    )
+    def llm_config():
+        settings = llm_settings()
+        return schemas.LLMConfigResponse(
+            configured=settings["configured"] == "true",
+            model=settings["model"],
+            base_url=settings["base_url"],
         )
 
     @app.get(

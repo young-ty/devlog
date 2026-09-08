@@ -124,6 +124,7 @@ class TimelineCommitResponse(BaseModel):
     deletions: int
     parents_count: int
     noise_type: str
+    translated_subject: str | None = None
 
 
 class TimelineThemeResponse(BaseModel):
@@ -157,6 +158,7 @@ class TimelineResponse(BaseModel):
 
     @classmethod
     def from_result(cls, result):
+        translations = getattr(result, "translations", {})
         return cls(
             project_id=result.project_id,
             project_name=result.project_name,
@@ -164,7 +166,10 @@ class TimelineResponse(BaseModel):
             range_start=result.range_start,
             range_end=result.range_end,
             commits=[
-                TimelineCommitResponse(**event.to_dict())
+                TimelineCommitResponse(
+                    **event.to_dict(),
+                    translated_subject=translations.get(event.hash),
+                )
                 for event in result.commits
             ],
             themes=[
@@ -189,6 +194,30 @@ class TimelineResponse(BaseModel):
                 for period in result.silence_periods
             ],
         )
+
+
+class TranslationResponse(BaseModel):
+    project_id: int
+    project_name: str
+    project_path: str
+    translated_count: int
+    remaining_count: int
+
+    @classmethod
+    def from_result(cls, result):
+        return cls(
+            project_id=result.project_id,
+            project_name=result.project_name,
+            project_path=result.project_path,
+            translated_count=result.translated_count,
+            remaining_count=result.remaining_count,
+        )
+
+
+class LLMConfigResponse(BaseModel):
+    configured: bool
+    model: str
+    base_url: str
 
 
 class ExportRequest(BaseModel):

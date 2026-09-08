@@ -25,7 +25,7 @@ from devlog.core.review.models import (
 )
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA_V1_STATEMENTS = [
     """
@@ -91,6 +91,24 @@ _SCHEMA_V2_STATEMENTS = [
     """
     CREATE INDEX IF NOT EXISTS idx_review_claims_draft
         ON review_claims (draft_id, position)
+    """,
+]
+
+_SCHEMA_V3_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS commit_translations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        hash TEXT NOT NULL,
+        translated_subject TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (project_id, hash),
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_commit_translations_project_hash
+        ON commit_translations (project_id, hash)
     """,
 ]
 
@@ -207,6 +225,10 @@ class DevLogDB:
             # Version 1 -> 2 adds review draft and claim tables.
             if current < 2:
                 for statement in _SCHEMA_V2_STATEMENTS:
+                    self._conn.execute(statement)
+            # Version 2 -> 3 adds the AI commit translation cache.
+            if current < 3:
+                for statement in _SCHEMA_V3_STATEMENTS:
                     self._conn.execute(statement)
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
@@ -339,6 +361,54 @@ class DevLogDB:
         )
         self._conn.commit()
         return cursor.rowcount
+
+    # ------------------------------------------------------------------
+    # Commit translations (AI-derived display layer)
+    # ------------------------------------------------------------------
+
+    def save_commit_translations(
+        self,
+        project_id: int,
+        translations: dict[str, str],
+    ) -> int:
+        """Cache AI translations by (project_id, hash); returns inserted."""
+
+        now = datetime.now(timezone.utc).isoformat()
+        inserted = 0
+        for commit_hash, text in translations.items():
+            if not text.strip():
+                continue
+            cursor = self._conn.execute(
+                "INSERT OR IGNORE INTO commit_translations "
+                "(project_id, hash, translated_subject, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (project_id, commit_hash, text.strip(), now),
+            )
+            inserted += cursor.rowcount
+        self._conn.commit()
+        return inserted
+
+    def list_commit_translations(
+        self,
+        project_id: int,
+        hashes: list[str] | None = None,
+    ) -> dict[str, str]:
+        """Return cached translations for a project (optionally filtered)."""
+
+        if hashes is not None and not hashes:
+            return {}
+
+        sql = (
+            "SELECT hash, translated_subject FROM commit_translations "
+            "WHERE project_id = ?"
+        )
+        params: list[object] = [project_id]
+        if hashes is not None:
+            sql += " AND hash IN (" + ",".join("?" for _ in hashes) + ")"
+            params.extend(hashes)
+
+        rows = self._conn.execute(sql, params).fetchall()
+        return {str(row[0]): str(row[1]) for row in rows}
 
     # ------------------------------------------------------------------
     # Scan cursor

@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from devlog.cli import runner
 from devlog.cli.main import main as cli_main
@@ -271,6 +272,58 @@ class CLIReviewConfirmTests(unittest.TestCase):
             )
             with self.assertRaises(runner.CLIUsageError):
                 runner.cmd_review_confirm(db, draft_id)
+
+
+class CommitTranslationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root)
+        self.db_path = Path(self.root) / "devlog.db"
+        commit(
+            self.repo,
+            "login.py",
+            "def login(): ...\n",
+            "feat: add login page",
+            at(1),
+        )
+        commit(
+            self.repo,
+            "login.py",
+            "def login(): return True\n",
+            "fix: login button",
+            at(2),
+        )
+
+    def tearDown(self) -> None:
+        force_remove(self.root)
+
+    def test_translate_caches_new_subjects_and_is_idempotent(self) -> None:
+        with DevLogDB(self.db_path) as db:
+            project_id = runner.cmd_init(db, self.repo).project_id
+            runner.cmd_scan(db, self.repo)
+            events = db.list_events(project_id, include_noise=True)
+
+            fake = mock.MagicMock()
+            fake.complete_json.return_value = {
+                event.hash: "中文提交说明" for event in events
+            }
+            with mock.patch(
+                "devlog.cli.runner.DeepSeekClient", return_value=fake
+            ):
+                first = runner.cmd_translate_commits(db, project_id)
+                second = runner.cmd_translate_commits(db, project_id)
+
+            self.assertEqual(first.translated_count, 2)
+            self.assertEqual(first.remaining_count, 0)
+            self.assertEqual(second.translated_count, 0)
+            self.assertEqual(second.remaining_count, 0)
+            self.assertEqual(fake.complete_json.call_count, 1)
+
+            cached = db.list_commit_translations(project_id)
+            self.assertEqual(len(cached), 2)
+            self.assertTrue(
+                all(value == "中文提交说明" for value in cached.values())
+            )
 
 
 if __name__ == "__main__":

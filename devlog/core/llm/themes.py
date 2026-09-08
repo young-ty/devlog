@@ -10,6 +10,18 @@ from devlog.core.llm.base import LLMClientBase, LLMError
 from devlog.core.theming.models import Theme
 
 
+KIND_LABELS_ZH = {
+    "feature": "功能开发",
+    "bugfix": "问题修复",
+    "refactor": "重构",
+    "docs": "文档",
+    "test": "测试",
+    "perf": "性能优化",
+    "build": "构建",
+    "other": "其他",
+}
+
+
 THEME_JSON_INSTRUCTION = (
     "Return a JSON object only, with exactly these keys: "
     '"title" (short Chinese title), "kind" (feature/bugfix/refactor/docs/'
@@ -112,12 +124,14 @@ def rule_based_summary(theme: Theme) -> ThemeSummary:
 
     start = theme.started_at.date().isoformat()
     end = theme.ended_at.date().isoformat()
+    number = theme.id.split("-")[-1] if "-" in theme.id else theme.id
+    kind_zh = KIND_LABELS_ZH.get(theme.kind, theme.kind)
     summary = (
         f"共 {theme.commit_count} 次提交（{start} 至 {end}），"
-        f"类型为 {theme.kind}。"
+        f"属于{kind_zh}类工作。"
     )
     return ThemeSummary(
-        title=theme.title,
+        title=f"开发主题 {number}",
         kind=theme.kind,
         summary=summary,
         sources=theme.commit_hashes,

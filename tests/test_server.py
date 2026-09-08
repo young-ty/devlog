@@ -168,6 +168,11 @@ class APIFlowTests(unittest.TestCase):
             response = client.get("/api/projects/999/timeline")
             self.assertEqual(response.status_code, 404)
 
+            response = client.post(
+                "/api/projects/999/translations", json={}
+            )
+            self.assertEqual(response.status_code, 404)
+
             response = client.get("/api/reviews/999")
             self.assertEqual(response.status_code, 404)
 
@@ -255,6 +260,15 @@ class APIFlowTests(unittest.TestCase):
                 "/api/projects", json={"path": str(plain)}
             )
             self.assertEqual(response.status_code, 400)
+
+    def test_llm_config_reports_safe_settings(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.get("/api/llm/config")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("model", body)
+        self.assertIn("base_url", body)
+        self.assertIsInstance(body["configured"], bool)
 
 
 if __name__ == "__main__":

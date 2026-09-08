@@ -180,7 +180,7 @@ class RuleBaselineTests(unittest.TestCase):
         self.assertIn("共 2 次提交", result.summary)
         self.assertIn("2026-09-01", result.summary)
         self.assertIn("2026-09-02", result.summary)
-        self.assertIn("bugfix", result.summary)
+        self.assertIn("问题修复", result.summary)
 
     def test_offline_report_covers_eight_golden_cases(self) -> None:
         report = run_offline(build_cases(), threshold=0.0)
