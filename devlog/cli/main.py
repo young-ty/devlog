@@ -7,11 +7,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import uvicorn
+
+from devlog import __version__
 from devlog.cli import runner
 from devlog.core.git_source.scanner import GitSourceError
 from devlog.core.llm.base import LLMError
 from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError
+from devlog.server.app import create_app
 
 
 def _date_argument(value: str) -> datetime:
@@ -39,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--db",
         default=None,
         help="状态数据库路径（默认 ~/.devlog/devlog.db）",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="命令")
 
@@ -108,6 +117,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="输出文件路径（默认 <仓库>/docs/retrospectives/）",
     )
 
+    serve_parser = sub.add_parser(
+        "serve",
+        help="启动本地 API 服务（配合 Web 前端或接口调试）",
+    )
+    serve_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="监听地址（默认 127.0.0.1，仅本机可访问）",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="监听端口（默认 8000）",
+    )
+
     return parser
 
 
@@ -133,6 +158,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         db_path = Path(args.db).expanduser() if args.db else None
+
+        if args.command == "serve":
+            uvicorn.run(
+                create_app(db_path=db_path),
+                host=args.host,
+                port=args.port,
+                log_level="info",
+            )
+            return 0
+
         with DevLogDB(db_path) as db:
             if args.command == "init":
                 result = runner.cmd_init(db, args.path)
