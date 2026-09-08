@@ -104,6 +104,26 @@ def summarize_theme(
     return ThemeSummary.from_dict(data)
 
 
+def rule_based_summary(theme: Theme) -> ThemeSummary:
+    """Offline fallback: describe a theme from Git facts only.
+
+    Used by the CLI offline mode and by the deterministic eval baseline.
+    """
+
+    start = theme.started_at.date().isoformat()
+    end = theme.ended_at.date().isoformat()
+    summary = (
+        f"共 {theme.commit_count} 次提交（{start} 至 {end}），"
+        f"类型为 {theme.kind}。"
+    )
+    return ThemeSummary(
+        title=theme.title,
+        kind=theme.kind,
+        summary=summary,
+        sources=theme.commit_hashes,
+    )
+
+
 def _commit_lines(commits: list[CommitEvent]) -> list[str]:
     ordered = sorted(commits, key=lambda event: event.committed_at)
     lines: list[str] = []

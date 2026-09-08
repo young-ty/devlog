@@ -15,7 +15,7 @@ from pathlib import Path
 
 from devlog.core.git_source.scanner import GitSourceError, scan_repository
 from devlog.core.llm.deepseek import DeepSeekClient
-from devlog.core.llm.themes import ThemeSummary, summarize_theme
+from devlog.core.llm.themes import rule_based_summary, summarize_theme
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import write_markdown
 from devlog.core.review.models import ClaimStatus
@@ -25,7 +25,6 @@ from devlog.core.storage.database import (
     StoredReviewDraft,
 )
 from devlog.core.theming.cluster import cluster_themes
-from devlog.core.theming.models import Theme
 
 
 class CLIUsageError(ValueError):
@@ -142,23 +141,6 @@ def cmd_scan(
     )
 
 
-def _rule_based_summary(theme: Theme) -> ThemeSummary:
-    """Offline fallback: describe a theme from Git facts only."""
-
-    start = theme.started_at.date().isoformat()
-    end = theme.ended_at.date().isoformat()
-    summary = (
-        f"共 {theme.commit_count} 次提交（{start} 至 {end}），"
-        f"类型为 {theme.kind}。"
-    )
-    return ThemeSummary(
-        title=theme.title,
-        kind=theme.kind,
-        summary=summary,
-        sources=theme.commit_hashes,
-    )
-
-
 def cmd_review_generate(
     db: DevLogDB,
     path: str | Path | None,
@@ -185,7 +167,7 @@ def cmd_review_generate(
     range_end = events[-1].committed_at
 
     if offline:
-        summaries = [_rule_based_summary(theme) for theme in cluster.themes]
+        summaries = [rule_based_summary(theme) for theme in cluster.themes]
         draft = build_review_draft(
             project_name=project_name,
             range_start=range_start,
