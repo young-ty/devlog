@@ -1,15 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createProject, listProjects } from "../api";
 import type { Project } from "../types";
+import { formatDateTime } from "../utils";
 
 interface ProjectsPageProps {
-  onOpenProject: (projectId: number, projectName: string) => void;
+  onOpenProject: (
+    projectId: number,
+    projectName: string,
+    projectPath: string,
+  ) => void;
 }
 
 export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [path, setPath] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,8 +49,11 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
+    setError("");
+    setSuccess("");
     try {
-      await createProject(path, name || undefined);
+      const result = await createProject(path, name || undefined);
+      setSuccess(`已注册项目：${result.project_name}`);
       setPath("");
       setName("");
       setReloadKey((key) => key + 1);
@@ -55,17 +64,42 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
     }
   }
 
+  const scannedCount = projects.filter(
+    (project) => project.last_scanned_commit !== null,
+  ).length;
+
   return (
     <main className="container">
-      <h1>DevLog 项目</h1>
-      {error && <p className="error">{error}</p>}
+      <div className="page-head">
+        <h1>项目</h1>
+        <p className="page-sub">
+          选择要复盘的本机 Git 仓库。DevLog 只读 Git 历史，不会改动你的仓库。
+        </p>
+      </div>
 
-      <section className="card">
-        <h2>注册 Git 仓库</h2>
-        <form onSubmit={handleSubmit}>
+      {error && <p className="message error">{error}</p>}
+      {success && <p className="message success">{success}</p>}
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">已注册项目</div>
+          <div className="stat-value">{projects.length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">已扫描仓库</div>
+          <div className="stat-value accent">{scannedCount}</div>
+        </div>
+      </div>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>注册 Git 仓库</h2>
+          <span className="panel-hint">路径只在本地访问</span>
+        </div>
+        <form className="form-grid" onSubmit={handleSubmit}>
           <input
             required
-            placeholder="仓库绝对路径，如 D:\work\demo"
+            placeholder="仓库绝对路径，例如 D:\work\demo"
             value={path}
             onChange={(event) => setPath(event.target.value)}
           />
@@ -74,24 +108,61 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
-          <button type="submit" disabled={busy || !path}>
-            {busy ? "注册中…" : "注册"}
+          <button type="submit" disabled={busy || !path.trim()}>
+            {busy ? "注册中…" : "注册项目"}
           </button>
         </form>
       </section>
 
-      <section>
-        <h2>已注册项目</h2>
-        {loading && <p>加载中…</p>}
-        {!loading && projects.length === 0 && <p>还没有项目，先注册一个。</p>}
+      <section className="section">
+        <div className="panel-head">
+          <h2>已注册项目</h2>
+          <span className="panel-hint">
+            {loading ? "读取中…" : `${projects.length} 个`}
+          </span>
+        </div>
+
+        {loading && (
+          <>
+            <div className="skeleton" />
+            <div className="skeleton" />
+          </>
+        )}
+
+        {!loading && projects.length === 0 && (
+          <div className="empty">
+            <strong>还没有注册任何项目</strong>
+            把要复盘的项目路径填到上方，点击“注册项目”。
+          </div>
+        )}
+
         {projects.map((project) => (
           <button
             key={project.project_id}
-            className="project-row"
-            onClick={() => onOpenProject(project.project_id, project.name)}
+            className="item-card"
+            onClick={() =>
+              onOpenProject(
+                project.project_id,
+                project.name,
+                project.path,
+              )
+            }
           >
-            <strong>{project.name}</strong>
-            <span className="muted">{project.path}</span>
+            <div className="item-top">
+              <div>
+                <div className="item-title">{project.name}</div>
+                <div className="item-path mono">{project.path}</div>
+              </div>
+              <span className="arrow">→</span>
+            </div>
+            <div className="item-meta">
+              <span>
+                {project.last_scanned_commit
+                  ? `上次扫描 ${project.last_scanned_commit.slice(0, 7)}`
+                  : "尚未扫描"}
+              </span>
+              <span>注册于 {formatDateTime(project.created_at)}</span>
+            </div>
           </button>
         ))}
       </section>

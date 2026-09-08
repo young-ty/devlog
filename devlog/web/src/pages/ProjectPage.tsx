@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { generateReview, listReviews, scanProject } from "../api";
 import type { ReviewSummary } from "../types";
+import { formatDateTime, formatRange } from "../utils";
 
 interface ProjectPageProps {
   projectId: number;
   projectName: string;
+  projectPath: string;
   onBack: () => void;
   onOpenReview: (draftId: number) => void;
 }
@@ -12,6 +14,7 @@ interface ProjectPageProps {
 export function ProjectPage({
   projectId,
   projectName,
+  projectPath,
   onBack,
   onOpenReview,
 }: ProjectPageProps) {
@@ -19,7 +22,7 @@ export function ProjectPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -29,6 +32,7 @@ export function ProjectPage({
       .then((items) => {
         if (!cancelled) {
           setReviews(items);
+          setError("");
         }
       })
       .catch((err: Error) => {
@@ -49,12 +53,13 @@ export function ProjectPage({
   async function handleScan(reset: boolean) {
     setBusy(true);
     setError("");
-    setMessage("");
+    setSuccess("");
     try {
       const result = await scanProject(projectId, reset);
-      setMessage(
-        `${reset ? "已重置并" : ""}扫描完成：共 ${result.total_events} 条提交，新写入 ${result.inserted_events} 条`,
+      setSuccess(
+        `${reset ? "已重置并重新" : ""}扫描完成：共 ${result.total_events} 条提交，本次新写入 ${result.inserted_events} 条`,
       );
+      setReloadKey((key) => key + 1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -65,11 +70,11 @@ export function ProjectPage({
   async function handleGenerate() {
     setBusy(true);
     setError("");
-    setMessage("");
+    setSuccess("");
     try {
       const result = await generateReview(projectId, true);
-      setMessage(
-        `已生成草稿 #${result.draft_id}（离线模式），共 ${result.claim_count} 条论断。`,
+      setSuccess(
+        `已生成草稿 #${result.draft_id}（离线模式）：${result.claim_count} 条论断、${result.question_count} 个引导问题`,
       );
       setReloadKey((key) => key + 1);
     } catch (err) {
@@ -79,48 +84,146 @@ export function ProjectPage({
     }
   }
 
+  const pendingCount = reviews.reduce(
+    (sum, review) => sum + review.ai_pending_claims,
+    0,
+  );
+  const confirmedCount = reviews.reduce(
+    (sum, review) => sum + review.confirmed_claims,
+    0,
+  );
+  const totalClaimCount = reviews.reduce(
+    (sum, review) => sum + review.total_claims,
+    0,
+  );
+
   return (
     <main className="container">
-      <button className="link-button" onClick={onBack}>
-        ← 返回项目列表
-      </button>
-      <h1>{projectName}</h1>
-      {error && <p className="error">{error}</p>}
-      {message && <p className="success">{message}</p>}
+      <div className="page-head">
+        <button className="back-link" onClick={onBack}>
+          ← 返回项目列表
+        </button>
+        <h1>{projectName}</h1>
+        <p className="page-sub mono">{projectPath}</p>
+      </div>
 
-      <section className="card actions">
-        <button disabled={busy} onClick={() => handleScan(false)}>
-          扫描仓库
-        </button>
-        <button disabled={busy} onClick={() => handleScan(true)}>
-          重置并重扫
-        </button>
-        <button disabled={busy} onClick={handleGenerate}>
-          生成复盘草稿（离线）
-        </button>
+      {error && <p className="message error">{error}</p>}
+      {success && <p className="message success">{success}</p>}
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">复盘草稿</div>
+          <div className="stat-value">{reviews.length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">全部论断</div>
+          <div className="stat-value">{totalClaimCount}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">待确认</div>
+          <div className="stat-value warning">{pendingCount}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">已确认</div>
+          <div className="stat-value success">{confirmedCount}</div>
+        </div>
+      </div>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>数据与复盘</h2>
+          <span className="panel-hint">生成草稿前先扫描，让数据保持最新</span>
+        </div>
+        <div className="actions">
+          <button disabled={busy} onClick={() => handleScan(false)}>
+            {busy ? "处理中…" : "扫描仓库"}
+          </button>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => handleScan(true)}
+          >
+            重置并重扫
+          </button>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={handleGenerate}
+          >
+            生成复盘草稿（离线）
+          </button>
+        </div>
       </section>
 
-      <section>
-        <h2>复盘草稿</h2>
-        {loading && <p>加载中…</p>}
-        {!loading && reviews.length === 0 && (
-          <p>还没有草稿。先点上方"生成复盘草稿（离线）"。</p>
+      <section className="section">
+        <div className="panel-head">
+          <h2>复盘草稿</h2>
+          <span className="panel-hint">
+            {loading
+              ? "读取中…"
+              : `${reviews.length} 份 · ${pendingCount} 条待确认`}
+          </span>
+        </div>
+
+        {loading && (
+          <>
+            <div className="skeleton" />
+            <div className="skeleton" />
+          </>
         )}
-        {reviews.map((review) => (
-          <button
-            key={review.draft_id}
-            className="project-row"
-            onClick={() => onOpenReview(review.draft_id)}
-          >
-            <strong>草稿 #{review.draft_id}</strong>
-            <span className="muted">
-              {review.range_start.slice(0, 10)} ~ {review.range_end.slice(0, 10)}
-              {" · "}
-              论断 {review.total_claims}（待确认 {review.ai_pending_claims}，已确认{" "}
-              {review.confirmed_claims}）
-            </span>
-          </button>
-        ))}
+
+        {!loading && reviews.length === 0 && (
+          <div className="empty">
+            <strong>还没有复盘草稿</strong>
+            先扫描仓库，再点击“生成复盘草稿（离线）”，几分钟内得到第一版草稿。
+          </div>
+        )}
+
+        {reviews.map((review) => {
+          const confirmedRatio =
+            review.total_claims === 0
+              ? 0
+              : Math.round(
+                  (review.confirmed_claims / review.total_claims) * 100,
+                );
+          return (
+            <button
+              key={review.draft_id}
+              className="item-card"
+              onClick={() => onOpenReview(review.draft_id)}
+            >
+              <div className="item-top">
+                <div>
+                  <div className="item-title">
+                    草稿 #{review.draft_id}
+                    {review.ai_pending_claims === 0 && (
+                      <span className="badge badge-confirmed">已处理完</span>
+                    )}
+                  </div>
+                  <div className="item-path">
+                    {formatRange(
+                      review.range_start,
+                      review.range_end,
+                    )}
+                  </div>
+                </div>
+                <span className="arrow">→</span>
+              </div>
+              <div className="item-meta">
+                <span>论断 {review.total_claims}</span>
+                <span>待确认 {review.ai_pending_claims}</span>
+                <span>已确认 {review.confirmed_claims}</span>
+                <span>生成于 {formatDateTime(review.created_at)}</span>
+              </div>
+              <div className="progress">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${confirmedRatio}%` }}
+                />
+              </div>
+            </button>
+          );
+        })}
       </section>
     </main>
   );

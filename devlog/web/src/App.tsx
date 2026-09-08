@@ -5,27 +5,63 @@ import { ReviewPage } from "./pages/ReviewPage";
 
 type View =
   | { name: "projects" }
-  | { name: "project"; projectId: number; projectName: string }
-  | { name: "review"; draftId: number; projectId: number; projectName: string };
+  | {
+      name: "project";
+      projectId: number;
+      projectName: string;
+      projectPath: string;
+    }
+  | {
+      name: "review";
+      draftId: number;
+      projectId: number;
+      projectName: string;
+      projectPath: string;
+    };
+
+function TopBar() {
+  return (
+    <header className="topbar">
+      <div className="topbar-inner">
+        <div className="brand">
+          <span className="brand-mark">D</span>
+          <span>
+            <div className="brand-title">DevLog</div>
+            <div className="brand-sub">开发复盘工作台</div>
+          </span>
+        </div>
+        <span className="topbar-chip">
+          <span className="dot" />
+          <span>本地模式 · Git 驱动</span>
+        </span>
+      </div>
+    </header>
+  );
+}
 
 export default function App() {
   const [view, setView] = useState<View>({ name: "projects" });
 
+  let page;
   if (view.name === "projects") {
-    return (
+    page = (
       <ProjectsPage
-        onOpenProject={(projectId, projectName) =>
-          setView({ name: "project", projectId, projectName })
+        onOpenProject={(projectId, projectName, projectPath) =>
+          setView({
+            name: "project",
+            projectId,
+            projectName,
+            projectPath,
+          })
         }
       />
     );
-  }
-
-  if (view.name === "project") {
-    return (
+  } else if (view.name === "project") {
+    page = (
       <ProjectPage
         projectId={view.projectId}
         projectName={view.projectName}
+        projectPath={view.projectPath}
         onBack={() => setView({ name: "projects" })}
         onOpenReview={(draftId) =>
           setView({
@@ -33,6 +69,21 @@ export default function App() {
             draftId,
             projectId: view.projectId,
             projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
+      />
+    );
+  } else {
+    page = (
+      <ReviewPage
+        draftId={view.draftId}
+        onBack={() =>
+          setView({
+            name: "project",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
           })
         }
       />
@@ -40,15 +91,9 @@ export default function App() {
   }
 
   return (
-    <ReviewPage
-      draftId={view.draftId}
-      onBack={() =>
-        setView({
-          name: "project",
-          projectId: view.projectId,
-          projectName: view.projectName,
-        })
-      }
-    />
+    <div className="app-shell">
+      <TopBar />
+      {page}
+    </div>
   );
 }
