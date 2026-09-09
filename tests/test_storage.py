@@ -1,7 +1,7 @@
-"""Module 2 tests: SQLite state store.
+"""模块 2 测试：SQLite 状态存储。
 
-Every test uses a throwaway database file under a temp directory so real
-user data under ~/.devlog/ is never touched.
+每个测试都在临时目录下使用一次性数据库文件，绝不触碰 ~/.devlog/
+中的真实用户数据。
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def make_event(number: int, day: int, noise: NoiseType = NoiseType.NONE) -> Comm
 
 
 def make_v1_database(path: Path) -> None:
-    """Create a database that only knows schema version 1."""
+    """创建一个只知道 schema 版本 1 的数据库。"""
 
     conn = database_module.sqlite3.connect(str(path))
     for statement in database_module._SCHEMA_V1_STATEMENTS:
@@ -286,7 +286,7 @@ class DevLogDBTests(unittest.TestCase):
         draft_id = self.db.save_review_draft(project_id, make_sample_draft())
         record = self.db.load_review_draft(draft_id)
 
-        # Recover claim ids from the stored record wrapper.
+        # 从存储记录包装对象中取回论断 id。
         fact_id = next(
             item.id for item in record.stored_claims if item.claim.status == ClaimStatus.FACT
         )

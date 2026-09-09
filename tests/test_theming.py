@@ -1,4 +1,4 @@
-"""Module 3 tests: theme clustering, milestone and silence detection."""
+"""模块 3 测试：主题聚类、里程碑与静默期识别。"""
 
 from __future__ import annotations
 

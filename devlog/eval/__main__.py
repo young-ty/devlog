@@ -1,4 +1,4 @@
-"""Allow ``python -m devlog.eval`` to run the evaluation suite."""
+"""允许通过 ``python -m devlog.eval`` 运行评测套件。"""
 
 from devlog.eval.runner import run_cli
 

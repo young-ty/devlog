@@ -1,4 +1,4 @@
-"""Module 7 tests: FastAPI endpoints over a real throwaway repository."""
+"""模块 7 测试：基于真实临时仓库的 FastAPI 接口测试。"""
 
 from __future__ import annotations
 

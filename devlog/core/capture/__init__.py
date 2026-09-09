@@ -1,1 +1,1 @@
-"""Memory layer domain: daily notes, bug capture and commit annotations."""
+"""记忆层领域：每日笔记、Bug 捕获与 commit 批注。"""

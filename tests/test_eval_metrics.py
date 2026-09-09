@@ -1,8 +1,7 @@
-"""Module 9 tests: golden-set eval metrics, offline baseline and online judge.
+"""模块 9 测试：金标准评测指标、离线基线与在线裁判。
 
-Rule summaries are deterministic and offline scoring never calls a real API.
-The online judge path is covered with a FakeClient so the suite stays free,
-fast and deterministic.
+规则摘要是确定性的，离线评分从不调用真实 API。在线裁判路径用
+FakeClient 覆盖，保证测试套件免费、快速且确定。
 """
 
 from __future__ import annotations
@@ -100,7 +99,7 @@ class TokenAndCoverageTests(unittest.TestCase):
         self.assertEqual(dice_coverage("登录", ""), 0.0)
 
     def test_semantic_paraphrase_is_undervalued_by_lexical_match(self) -> None:
-        # Same meaning, but no shared characters -> lexical coverage cannot see it.
+        # 语义相同但无共同字符 -> 词法覆盖度无法识别这种等价。
         self.assertEqual(dice_coverage("身份认证工作结束", "登录功能完成"), 0.0)
 
 

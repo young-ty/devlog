@@ -1,4 +1,4 @@
-"""Data models for a structured review draft."""
+"""结构化复盘草稿的数据模型。"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ SECTION_ORDER = [
 
 
 class ClaimStatus(str, enum.Enum):
-    """Lifecycle of one claim in a review draft."""
+    """复盘草稿中一条论断的生命周期。"""
 
     FACT = "fact"
     AI_PENDING = "ai_pending"
@@ -37,7 +37,7 @@ class ClaimStatus(str, enum.Enum):
 
 @dataclass(frozen=True)
 class ReviewClaim:
-    """One independently confirmable statement inside the draft."""
+    """草稿中可以独立确认的一条陈述。"""
 
     section: str
     text: str
@@ -48,7 +48,7 @@ class ReviewClaim:
 
 @dataclass
 class ReviewDraft:
-    """Full review document assembled from facts, AI claims and questions."""
+    """由事实、AI 论断和引导问题组装而成的完整复盘文档。"""
 
     project_name: str
     range_start: datetime

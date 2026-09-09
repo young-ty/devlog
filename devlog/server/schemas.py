@@ -1,4 +1,4 @@
-"""Pydantic request/response models for the DevLog HTTP API."""
+"""DevLog HTTP API 的 Pydantic 请求/响应模型。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class _FromAttributes(BaseModel):
-    """Base model that can be built from dataclass objects."""
+    """可从 dataclass 对象构建的基类模型。"""
 
     model_config = ConfigDict(from_attributes=True)
 

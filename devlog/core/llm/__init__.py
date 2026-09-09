@@ -1,4 +1,4 @@
-"""LLM provider abstraction and chunked summarization."""
+"""LLM 供应商抽象与分块摘要。"""
 
 from devlog.core.llm.base import LLMClientBase, LLMError
 from devlog.core.llm.chunking import chunk_texts, summarize_texts_in_chunks

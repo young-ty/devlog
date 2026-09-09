@@ -1,4 +1,4 @@
-"""Review draft engine and Markdown export."""
+"""复盘草稿引擎与 Markdown 导出。"""
 
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import export_markdown, write_markdown

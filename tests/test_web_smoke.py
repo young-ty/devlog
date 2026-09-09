@@ -1,4 +1,4 @@
-"""Module 8 smoke tests: React frontend structure and production build."""
+"""模块 8 冒烟测试：React 前端结构与生产构建。"""
 
 from __future__ import annotations
 

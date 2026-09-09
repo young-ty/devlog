@@ -1,7 +1,7 @@
-"""Module 1 tests: Git repository scanning and event normalization.
+"""模块 1 测试：Git 仓库扫描与事件规范化。
 
-Each test builds a real throwaway git repository so behavior stays
-reproducible and independent of the working project.
+每个测试都构建一个真实的一次性 git 仓库，保证行为可复现，
+且不受当前工作项目影响。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ TZ = timezone(timedelta(hours=8))
 
 
 def force_remove(path: Path) -> None:
-    """Remove a temp git repo even when git marked object files read-only."""
+    """即使 git 把对象文件标成只读，也要能删除临时仓库。"""
 
     def onerror(func, item, _info):
         os.chmod(item, stat.S_IWRITE)

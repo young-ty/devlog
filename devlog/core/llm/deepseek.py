@@ -1,7 +1,6 @@
-"""DeepSeek provider using its OpenAI-compatible chat endpoint.
+"""基于 OpenAI 兼容聊天接口的 DeepSeek 供应商实现。
 
-Uses only the standard library on purpose: no third-party dependency is
-required for HTTP or configuration in V1.
+刻意只使用标准库：V1 的 HTTP 与配置解析不需要任何第三方依赖。
 """
 
 from __future__ import annotations
@@ -24,10 +23,9 @@ NETWORK_RETRY_ATTEMPTS = 3
 
 
 def load_local_config(config_path: str | Path | None = None) -> dict[str, str]:
-    """Read a simple key = value config file (TOML-like subset).
+    """读取简单的 key = value 配置文件（TOML 子集）。
 
-    The default location is ~/.devlog/config.toml. Secret values stay
-    outside every git repository by design.
+    默认位置是 ~/.devlog/config.toml。密钥按设计保存在所有 Git 仓库之外。
     """
 
     path = Path(config_path) if config_path is not None else Path.home() / ".devlog" / "config.toml"
@@ -45,7 +43,7 @@ def load_local_config(config_path: str | Path | None = None) -> dict[str, str]:
 
 
 def llm_settings(config_path: str | Path | None = None) -> dict[str, str]:
-    """Return safe, non-secret LLM settings for the Web UI."""
+    """返回供 Web 界面使用的安全（不含密钥）LLM 配置。"""
 
     config = load_local_config(config_path)
     api_key = os.environ.get("DEEPSEEK_API_KEY") or config.get("api_key")
@@ -57,7 +55,7 @@ def llm_settings(config_path: str | Path | None = None) -> dict[str, str]:
 
 
 class DeepSeekClient(LLMClientBase):
-    """Call DeepSeek's OpenAI-compatible chat completions API."""
+    """调用 DeepSeek 的 OpenAI 兼容 chat completions API。"""
 
     def __init__(
         self,

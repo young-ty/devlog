@@ -1,4 +1,4 @@
-"""Module 5 tests: review draft engine and Markdown export."""
+"""模块 5 测试：复盘草稿引擎与 Markdown 导出。"""
 
 from __future__ import annotations
 

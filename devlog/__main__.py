@@ -1,4 +1,4 @@
-"""Allow `python -m devlog` to run the CLI."""
+"""允许通过 `python -m devlog` 运行命令行工具。"""
 
 from devlog.cli.main import main as entry
 

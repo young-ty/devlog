@@ -1,4 +1,4 @@
-"""Human-annotated golden set for DevLog theme summary evaluation."""
+"""供 DevLog 主题摘要评测使用的人工标注金标准集。"""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def _case(
 
 
 def build_cases() -> list[EvalCase]:
-    """Return the full golden set used by offline and online evaluation."""
+    """返回离线与在线评测使用的完整金标准集。"""
 
     return [
         _case(

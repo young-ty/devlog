@@ -1,8 +1,7 @@
-"""Smoke tests for docs/product-design.md.
+"""docs/product-design.md 的冒烟测试。
 
-The design doc is the source of truth for product scope, so these checks
-guard against accidental loss of the core V1 decisions (zero-intrusion Git
-source, human-in-the-loop review, evidence tracing, V2/V3 boundaries).
+设计文档是产品范围的唯一事实来源，因此这些检查防止核心 V1 决策
+（零侵入 Git 数据源、人机共创复盘、论断可追溯、V2/V3 边界）被误删。
 """
 
 from __future__ import annotations

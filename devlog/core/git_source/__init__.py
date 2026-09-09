@@ -1,1 +1,1 @@
-"""Read Git history and turn it into normalized commit events."""
+"""读取 Git 历史并将其转换为规范的 commit 事件。"""

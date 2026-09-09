@@ -1,13 +1,13 @@
-"""Smoke tests for the DevLog V1 interactive prototype (devlog_mvp_v1.html).
+"""DevLog V1 交互原型（devlog_mvp_v1.html）的冒烟测试。
 
-The prototype is a static HTML mock, so the tests validate structural and
-content-level invariants that matter for the V1 product scope:
+原型是静态 HTML mock，因此测试验证的是对 V1 产品范围重要的结构与
+内容不变量：
 
-- all four tabs exist, including the disabled V2 roadmap tab;
-- the V2 roadmap panel is present;
-- every AI claim shown in the review draft carries a commit citation or is
-  explicitly marked as "待确认" (so the demo never implies unverified facts);
-- the tab-switching selector bug from the earlier mock is gone.
+- 四个标签页都存在，包括置灰的 V2 路线图标签；
+- V2 路线图面板存在；
+- 复盘草稿中每条 AI 论断都带 commit 引用，或显式标记为“待确认”
+  （演示稿绝不能暗示未经核实的事实）；
+- 早期 mock 里切换标签的 selector bug 已修复。
 """
 
 from __future__ import annotations
@@ -45,17 +45,16 @@ def test_review_claims_are_traceable_or_pending(html: str) -> None:
 
 
 def test_old_selector_bug_is_fixed(html: str) -> None:
-    # The earlier mock had an unterminated CSS attribute selector:
+    # 早期 mock 有一个未闭合的 CSS 属性选择器：
     #   querySelector('.tab-btn[data-tab="' + tabName + '"')
-    # which throws on tab switch. Make sure no broken copy survives.
+    # 切换标签时会抛错。确保仓库里不再存在这种坏写法。
     assert '.tab-btn[data-tab="\' + tabName + \'"' not in html
     assert 'data-tab="\' + tabName + \'"' not in html
     assert '.tab-btn[data-tab="' in html  # well-formed selector used
 
 
 def test_timeline_only_contains_git_events_in_v1(html: str) -> None:
-    # Bug/note timeline dots are not rendered in V1; they appear only as
-    # dashed V2 placeholders.
+    # V1 不渲染 Bug/笔记时间线圆点，它们只以虚线 V2 占位符出现。
     assert "V2 出现" in html
 
 

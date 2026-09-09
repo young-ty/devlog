@@ -1,8 +1,7 @@
-"""Domain models for the daily-note / bug-capture memory layer.
+"""每日笔记 / Bug 捕获 / commit 批注记忆层的领域模型。
 
-Git events answer "what was committed"; these records answer "what did I
-learn or hit while working" and are always written by the human (or
-AI-suggested and then human-confirmed) rather than derived from Git.
+Git 事件回答“提交了什么”；这些记录回答“开发时遇到了什么、学到了什么”，
+始终由人书写（或由 AI 建议、经人确认后采用），而不是从 Git 推导。
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from datetime import date
 
 
 class BugStatus(str, enum.Enum):
-    """Lifecycle of one captured bug record."""
+    """一条已捕获 Bug 记录的生命周期。"""
 
     OPEN = "open"
     ROOT_CAUSE_FOUND = "root_cause_found"
@@ -21,7 +20,7 @@ class BugStatus(str, enum.Enum):
 
 
 class AnnotationKind(str, enum.Enum):
-    """Type of a note anchored to one commit."""
+    """挂在某条 commit 上的批注类型。"""
 
     NOTE = "note"
     DECISION = "decision"
@@ -29,7 +28,7 @@ class AnnotationKind(str, enum.Enum):
 
 @dataclass(frozen=True)
 class DailyNote:
-    """Human-written recap for one project on one calendar date."""
+    """一个人针对某个项目在某个日历日期写下的复盘。"""
 
     note_date: date
     summary: str = ""
@@ -39,7 +38,7 @@ class DailyNote:
 
 @dataclass(frozen=True)
 class BugRecord:
-    """A scene snapshot captured when a bug appears, plus later answers."""
+    """Bug 出现时捕获的现场快照，以及事后补充的答案。"""
 
     title: str
     error_text: str = ""
@@ -54,7 +53,7 @@ class BugRecord:
 
 @dataclass(frozen=True)
 class CommitAnnotation:
-    """A lightweight note anchored to one commit of one project."""
+    """挂在某项目某条 commit 上的轻量批注。"""
 
     commit_hash: str
     kind: AnnotationKind = AnnotationKind.NOTE

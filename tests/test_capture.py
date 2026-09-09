@@ -1,7 +1,6 @@
-"""Module 10 tests: memory layer storage (daily notes, bugs, annotations).
+"""模块 10 测试：记忆层存储（每日笔记、Bug、批注）。
 
-Every test uses a throwaway database under a temp directory so real user
-data under ~/.devlog/ is never touched.
+每个测试都在临时目录下使用一次性数据库，绝不触碰 ~/.devlog/ 中的真实数据。
 """
 
 from __future__ import annotations
@@ -221,8 +220,8 @@ class CommitAnnotationTests(DevLogDBMemoryLayerBase):
         other_project = register_project(self.db, "other")
         commit_hash = f"{1:040d}"
         self.db.save_events(project_id, self._event(commit_hash))
-        # The same hash exists in another project: it must not rescue the
-        # orphan, because commits are scoped per project.
+        # 同一 hash 也存在于另一个项目：这不能“救回”孤儿批注，
+        # 因为 commit 是按项目隔离的。
         self.db.save_events(other_project, self._event(commit_hash))
         annotation_id = self.db.add_commit_annotation(
             project_id,

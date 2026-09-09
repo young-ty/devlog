@@ -1,7 +1,7 @@
-"""Module 4 tests: LLM abstraction, chunking and structured summaries.
+"""模块 4 测试：LLM 抽象、分块与结构化摘要。
 
-No real network call is made: a FakeClient stands in for the provider so
-tests stay fast, deterministic and free.
+不会发起真实网络调用：FakeClient 充当供应商，让测试保持快速、
+确定且零成本。
 """
 
 from __future__ import annotations

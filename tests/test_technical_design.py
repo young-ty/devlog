@@ -1,9 +1,8 @@
-"""Smoke tests for docs/technical-design.md.
+"""docs/technical-design.md 的冒烟测试。
 
-Guards the key engineering decisions that were agreed during design:
-SQLite as local state store only (never the source of truth), Git as the
-truth source, provider-agnostic LLM access, React instead of Gradio, and
-review claims carrying explicit source/status semantics.
+保护设计阶段确定的关键工程决策：SQLite 仅作本地状态存储（永不作事实
+来源）、Git 是事实来源、LLM 访问与供应商无关、前端用 React 而非
+Gradio，以及复盘论断携带明确的来源/状态语义。
 """
 
 from __future__ import annotations

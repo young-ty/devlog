@@ -1,8 +1,7 @@
-"""Deterministic text chunking and chunked summarization.
+"""确定性的文本分块与分块摘要。
 
-Long histories are split into budget-sized chunks, summarized per chunk,
-then merged into one final summary. This keeps every request inside the
-model context window and keeps token cost predictable.
+长历史会被切分为符合预算大小的多个分块，先逐块摘要，再合并成最终
+摘要。这样每次请求都保持在模型上下文窗口内，token 成本也可预测。
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ MERGE_INSTRUCTION = (
 
 
 def chunk_texts(texts: list[str], max_chars_per_chunk: int) -> list[list[str]]:
-    """Split lines into chunks that each fit the character budget."""
+    """把多段文本切成每个都符合字符预算的分块。"""
 
     if max_chars_per_chunk <= 0:
         raise ValueError("max_chars_per_chunk must be positive")
@@ -32,7 +31,7 @@ def chunk_texts(texts: list[str], max_chars_per_chunk: int) -> list[list[str]]:
     current_size = 0
 
     for text in texts:
-        cost = len(text) + 1  # account for the newline
+        cost = len(text) + 1  # 把换行符算进长度
         if current and current_size + cost > max_chars_per_chunk:
             chunks.append(current)
             current = []
@@ -51,7 +50,7 @@ def summarize_texts_in_chunks(
     max_chars_per_chunk: int = 4000,
     merge: bool = True,
 ) -> str:
-    """Summarize texts chunk by chunk and optionally merge the results."""
+    """逐块摘要文本，并可选地把各块结果合并为最终摘要。"""
 
     if not texts:
         return ""

@@ -1,4 +1,4 @@
-"""Thin command-line shell: parse arguments, call runner, print results."""
+"""轻量命令行外壳：解析参数、调用 runner、打印结果。"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from devlog.server.app import create_app
 
 
 def _date_argument(value: str) -> datetime:
-    """Parse --since/--until into a timezone-aware datetime."""
+    """把 --since/--until 解析成带时区的 datetime。"""
 
     try:
         parsed = datetime.fromisoformat(value)
@@ -33,7 +33,7 @@ def _date_argument(value: str) -> datetime:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the full command tree for DevLog V1."""
+    """构建 DevLog V1 的完整命令树。"""
 
     parser = argparse.ArgumentParser(
         prog="devlog",
@@ -151,7 +151,7 @@ def _print_summary_line(summary) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point used by `python -m devlog` and by tests."""
+    """供 `python -m devlog` 与测试使用的入口。"""
 
     parser = build_parser()
     args = parser.parse_args(argv)

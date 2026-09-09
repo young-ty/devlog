@@ -1,4 +1,4 @@
-"""Commit event data models for DevLog git scanning."""
+"""DevLog Git 扫描产生的 commit 事件数据模型。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 
 class NoiseType(str, enum.Enum):
-    """Why a commit should be treated as low-signal noise."""
+    """为什么某条 commit 应被视为低信号噪音。"""
 
     NONE = "none"
     MERGE = "merge"
@@ -20,7 +20,7 @@ class NoiseType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class CommitEvent:
-    """One normalized commit, independent of git internals."""
+    """一条规范化的 commit，不依赖 Git 内部实现细节。"""
 
     hash: str
     short_hash: str
@@ -35,7 +35,7 @@ class CommitEvent:
     noise_type: NoiseType = NoiseType.NONE
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON or SQLite storage."""
+        """序列化为 JSON 或 SQLite 存储所需的结构。"""
 
         return {
             "hash": self.hash,

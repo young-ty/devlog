@@ -1,1 +1,1 @@
-"""Core domain logic shared by the CLI and the web server."""
+"""CLI 与 Web 服务器共享的核心领域逻辑。"""

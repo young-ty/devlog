@@ -1,4 +1,4 @@
-"""Data models produced by theme clustering."""
+"""主题聚类产生的数据模型。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class Theme:
-    """A group of commits that tell one part of the project story."""
+    """一组共同讲述项目某段故事的 commit。"""
 
     id: str
     title: str
@@ -22,7 +22,7 @@ class Theme:
 
 @dataclass(frozen=True)
 class SilencePeriod:
-    """A gap between non-noise commits worth asking about in a review."""
+    """非噪音 commit 之间值得在复盘中追问的空档期。"""
 
     started_at: datetime
     ended_at: datetime
@@ -31,7 +31,7 @@ class SilencePeriod:
 
 @dataclass(frozen=True)
 class ClusterResult:
-    """Everything derived from one clustering pass."""
+    """一次完整聚类得到的所有结果。"""
 
     themes: list[Theme]
     silence_periods: list[SilencePeriod]

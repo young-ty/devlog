@@ -1,4 +1,4 @@
-"""Structured theme summaries produced through the LLM client."""
+"""通过 LLM 客户端生成的结构化主题摘要。"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ THEME_JSON_INSTRUCTION = (
 
 @dataclass(frozen=True)
 class ThemeSummary:
-    """Validated structured output for one theme."""
+    """某个主题经过校验的结构化输出。"""
 
     title: str
     kind: str
@@ -70,7 +70,7 @@ def complete_json_with_retry(
     prompt: str,
     attempts: int = 2,
 ) -> dict[str, Any]:
-    """Ask for JSON, retry once with a hint, then degrade to an error."""
+    """请求 JSON；失败时带提示重试一次，仍失败则抛出错误。"""
 
     last_error: LLMError | None = None
     for attempt in range(max(1, attempts)):
@@ -94,7 +94,7 @@ def summarize_theme(
     commits: list[CommitEvent],
     client: LLMClientBase,
 ) -> ThemeSummary:
-    """Produce a validated structured summary for one theme."""
+    """为一个主题生成经过校验的结构化摘要。"""
 
     if not commits:
         return ThemeSummary(
@@ -117,9 +117,9 @@ def summarize_theme(
 
 
 def rule_based_summary(theme: Theme) -> ThemeSummary:
-    """Offline fallback: describe a theme from Git facts only.
+    """离线兜底：只依据 Git 事实描述一个主题。
 
-    Used by the CLI offline mode and by the deterministic eval baseline.
+    供 CLI 离线模式与确定性评测基线使用。
     """
 
     start = theme.started_at.date().isoformat()

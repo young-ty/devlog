@@ -1,4 +1,4 @@
-"""Module 10 tests: packaging metadata, version, serve command and README."""
+"""打包元数据、版本、serve 命令与 README 的测试。"""
 
 from __future__ import annotations
 

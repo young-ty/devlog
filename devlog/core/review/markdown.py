@@ -1,4 +1,4 @@
-"""Render a ReviewDraft as Markdown and write it to disk."""
+"""把 ReviewDraft 渲染为 Markdown 并写入磁盘。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ STATUS_LABELS = {
 
 
 class ReviewExportError(ValueError):
-    """Raised when a review document cannot be written."""
+    """当复盘文档无法写入时抛出。"""
 
 
 def _fmt_date(when) -> str:
@@ -42,7 +42,7 @@ def _claim_line(claim: ReviewClaim) -> str:
 
 
 def export_markdown(draft: ReviewDraft) -> str:
-    """Render the draft to a standalone Markdown document."""
+    """把草稿渲染成一份独立的 Markdown 文档。"""
 
     lines = [
         f"# 复盘：{draft.project_name}",
@@ -78,7 +78,7 @@ def export_markdown(draft: ReviewDraft) -> str:
 
 
 def write_markdown(draft: ReviewDraft, target_path: str | Path) -> Path:
-    """Render and write the draft to target_path (parent dirs created)."""
+    """渲染草稿并写入 target_path（会自动创建父目录）。"""
 
     target = Path(target_path).expanduser()
     if target.is_dir():

@@ -1,7 +1,7 @@
-"""Batch translation of Git commit subjects into Simplified Chinese.
+"""把 Git commit subject 批量翻译成简体中文。
 
-The original commit subject remains the source of truth. Translations are
-an AI-derived display layer cached locally and never written back to Git.
+原始 commit subject 始终是事实来源。翻译只是 AI 生成的显示层，
+缓存在本地，永远不会写回 Git。
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def translate_commit_subjects(
     items: list[tuple[str, str]],
     batch_size: int = BATCH_SIZE,
 ) -> dict[str, str]:
-    """Translate commit subjects in batches; returns hash -> Chinese text."""
+    """按批翻译 commit subject；返回 hash -> 中文文本 的映射。"""
 
     translations: dict[str, str] = {}
     for start in range(0, len(items), batch_size):
@@ -40,8 +40,7 @@ def translate_commit_subjects(
         try:
             data = complete_json_with_retry(client, prompt)
         except LLMError:
-            # A failed batch should not fail the whole project; the caller
-            # can retry the remaining hashes next time.
+            # 单个批次失败不应拖垮整个项目；调用方下次可重试剩余 hash。
             continue
 
         if not isinstance(data, dict):

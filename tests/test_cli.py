@@ -1,4 +1,4 @@
-"""Module 6 tests: CLI orchestration against a real throwaway repository."""
+"""模块 6 测试：针对真实临时仓库的 CLI 编排测试。"""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def at(day: int) -> datetime:
 
 
 def force_remove(path: Path) -> None:
-    """Remove a temp git repo even when git marked object files read-only."""
+    """即使 git 把对象文件标成只读，也要能删除临时仓库。"""
 
     def onerror(func, item, _info):
         os.chmod(item, stat.S_IWRITE)

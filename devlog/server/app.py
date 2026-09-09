@@ -1,7 +1,7 @@
-"""FastAPI application wrapping the module 6 runner as HTTP endpoints.
+"""把 runner 封装成 HTTP 接口的 FastAPI 应用。
 
-No business logic lives here: routes only translate HTTP requests into
-runner calls, exactly like cli/main.py does for the terminal.
+这里不写业务逻辑：路由只把 HTTP 请求翻译成 runner 调用，
+和 cli/main.py 处理终端输入的方式完全一致。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from devlog.server import schemas
 
 
 def create_app(db_path: str | Path | None = None) -> FastAPI:
-    """Build a configured DevLog API app (used by uvicorn and tests)."""
+    """构建配置好的 DevLog API 应用（供 uvicorn 与测试使用）。"""
 
     resolved_db = (
         str(Path(db_path).expanduser().resolve())

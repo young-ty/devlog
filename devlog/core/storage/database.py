@@ -1,12 +1,11 @@
-"""SQLite state store for DevLog projects, events and review drafts.
+"""DevLog 项目、事件与复盘草稿的 SQLite 状态存储。
 
-Design rules:
-- Git is the source of truth; this database is only a cache/state store.
-- The database lives outside scanned repositories (default ~/.devlog/).
-- Inserts are idempotent: the same (project_id, hash) is stored once.
-- Review drafts are work-in-progress state; only the exported Markdown
-  file enters the user's repository.
-- All user-supplied values go through parameterized queries.
+设计规则：
+- Git 是事实来源；本数据库只是缓存/状态存储。
+- 数据库位于被扫描的仓库之外（默认 ~/.devlog/）。
+- 插入是幂等的：同一 (project_id, hash) 只保存一次。
+- 复盘草稿属于进行中的状态；只有导出的 Markdown 文件会进入用户仓库。
+- 所有用户输入都通过参数化查询写入。
 """
 
 from __future__ import annotations
@@ -184,18 +183,18 @@ _COMMIT_COLUMNS = (
 
 
 class DatabaseError(RuntimeError):
-    """Raised when the state database cannot be used."""
+    """当状态数据库无法使用时抛出。"""
 
 
 def default_db_path() -> Path:
-    """Return the default local database location."""
+    """返回本地数据库的默认位置。"""
 
     return Path.home() / ".devlog" / "devlog.db"
 
 
 @dataclass(frozen=True)
 class ProjectSummary:
-    """One registered project row, used by the API and CLI listing."""
+    """一行已注册项目数据，供 API 与 CLI 列表使用。"""
 
     project_id: int
     name: str
@@ -206,7 +205,7 @@ class ProjectSummary:
 
 @dataclass(frozen=True)
 class ReviewDraftSummary:
-    """Lightweight row used by `devlog review list`."""
+    """供 `devlog review list` 使用的轻量行数据。"""
 
     draft_id: int
     project_id: int
@@ -222,7 +221,7 @@ class ReviewDraftSummary:
 
 @dataclass(frozen=True)
 class StoredReviewClaim:
-    """A persisted claim carrying its database id."""
+    """携带数据库 id 的已持久化论断。"""
 
     id: int
     claim: ReviewClaim
@@ -230,7 +229,7 @@ class StoredReviewClaim:
 
 @dataclass(frozen=True)
 class StoredReviewDraft:
-    """A persisted draft plus the project context needed to export it."""
+    """已持久化的草稿，外加导出所需的项目上下文。"""
 
     draft_id: int
     project_id: int
@@ -243,7 +242,7 @@ class StoredReviewDraft:
 
 @dataclass(frozen=True)
 class StoredDailyNote:
-    """A persisted daily note carrying its database id and timestamps."""
+    """携带数据库 id 与时间戳的已持久化每日笔记。"""
 
     id: int
     project_id: int
@@ -254,7 +253,7 @@ class StoredDailyNote:
 
 @dataclass(frozen=True)
 class StoredBugRecord:
-    """A persisted bug capture with its database id and timestamps."""
+    """携带数据库 id 与时间戳的已持久化 Bug 捕获。"""
 
     id: int
     project_id: int
@@ -265,7 +264,7 @@ class StoredBugRecord:
 
 @dataclass(frozen=True)
 class StoredCommitAnnotation:
-    """A persisted commit annotation with its database id and timestamps."""
+    """携带数据库 id 与时间戳的已持久化 commit 批注。"""
 
     id: int
     project_id: int
@@ -275,7 +274,7 @@ class StoredCommitAnnotation:
 
 
 class DevLogDB:
-    """Thin SQLite wrapper with an explicit, small API."""
+    """接口小而明确的轻量 SQLite 封装。"""
 
     def __init__(self, db_path: str | Path | None = None) -> None:
         path = Path(db_path) if db_path is not None else default_db_path()
@@ -304,7 +303,7 @@ class DevLogDB:
         self.close()
 
     # ------------------------------------------------------------------
-    # Schema helpers
+    # Schema 辅助
     # ------------------------------------------------------------------
 
     def _ensure_schema(self) -> None:
@@ -315,21 +314,20 @@ class DevLogDB:
                 f"version {SCHEMA_VERSION}"
             )
         if current < SCHEMA_VERSION:
-            # Version 0 -> 1 creates the initial tables. Future versions
-            # append their own migration steps here, never edit old ones.
+            # 版本 0 -> 1 创建初始表。以后的版本在这里追加各自的迁移步骤，
+            # 永远不要修改旧版本建表语句。
             if current == 0:
                 for statement in _SCHEMA_V1_STATEMENTS:
                     self._conn.execute(statement)
-            # Version 1 -> 2 adds review draft and claim tables.
+            # 版本 1 -> 2 新增复盘草稿与论断表。
             if current < 2:
                 for statement in _SCHEMA_V2_STATEMENTS:
                     self._conn.execute(statement)
-            # Version 2 -> 3 adds the AI commit translation cache.
+            # 版本 2 -> 3 新增 AI commit 翻译缓存。
             if current < 3:
                 for statement in _SCHEMA_V3_STATEMENTS:
                     self._conn.execute(statement)
-            # Version 3 -> 4 adds the memory layer: daily notes, bug
-            # capture and commit annotations.
+            # 版本 3 -> 4 新增记忆层：每日笔记、Bug 捕获与 commit 批注。
             if current < 4:
                 for statement in _SCHEMA_V4_STATEMENTS:
                     self._conn.execute(statement)
@@ -337,11 +335,11 @@ class DevLogDB:
             self._conn.commit()
 
     # ------------------------------------------------------------------
-    # Projects
+    # 项目
     # ------------------------------------------------------------------
 
     def register_project(self, name: str, path: str | Path) -> int:
-        """Register a repository. Registering the same path again is a no-op."""
+        """注册一个仓库。重复注册同一路径不会产生副作用。"""
 
         resolved = str(Path(path).expanduser().resolve())
         existing = self._conn.execute(
@@ -359,7 +357,7 @@ class DevLogDB:
         return int(cursor.lastrowid)
 
     def list_projects(self) -> list[ProjectSummary]:
-        """Return all registered projects, oldest first."""
+        """返回全部已注册项目，按最早注册的顺序排列。"""
 
         rows = self._conn.execute(
             "SELECT id, name, path, created_at, last_scanned_commit "
@@ -377,7 +375,7 @@ class DevLogDB:
         ]
 
     def get_project(self, project_id: int) -> ProjectSummary:
-        """Return one project by id, or raise a friendly DatabaseError."""
+        """按 id 返回一个项目；不存在时抛出友好的 DatabaseError。"""
 
         row = self._conn.execute(
             "SELECT id, name, path, created_at, last_scanned_commit "
@@ -395,11 +393,11 @@ class DevLogDB:
         )
 
     # ------------------------------------------------------------------
-    # Commits
+    # commit 事件
     # ------------------------------------------------------------------
 
     def save_events(self, project_id: int, events: list[CommitEvent]) -> int:
-        """Store commit events; duplicates are skipped. Returns inserted count."""
+        """保存 commit 事件；重复项会被跳过。返回实际插入条数。"""
 
         sql = (
             f"INSERT OR IGNORE INTO commits ({_COMMIT_COLUMNS}) "
@@ -435,10 +433,10 @@ class DevLogDB:
         until: datetime | None = None,
         include_noise: bool = False,
     ) -> list[CommitEvent]:
-        """Return cached events for a project, oldest first.
+        """返回某个项目缓存的 commit 事件，最早提交的在前。
 
-        Noise commits are hidden by default. Time filtering is inclusive
-        and performed in Python so mixed timezone offsets stay correct.
+        默认隐藏噪音 commit。时间过滤是包含式的，并在 Python 中完成，
+        这样混合时区偏移也能保持正确。
         """
 
         sql = "SELECT " + _COMMIT_COLUMNS + " FROM commits WHERE project_id = ?"
@@ -457,7 +455,7 @@ class DevLogDB:
         return events
 
     def clear_events(self, project_id: int) -> int:
-        """Delete all cached events for a project (cache can be rebuilt)."""
+        """删除某项目的全部缓存事件（缓存可重新扫描生成）。"""
 
         cursor = self._conn.execute(
             "DELETE FROM commits WHERE project_id = ?", (project_id,)
@@ -466,7 +464,7 @@ class DevLogDB:
         return cursor.rowcount
 
     # ------------------------------------------------------------------
-    # Commit translations (AI-derived display layer)
+    # commit 翻译（AI 生成的显示层）
     # ------------------------------------------------------------------
 
     def save_commit_translations(
@@ -474,7 +472,7 @@ class DevLogDB:
         project_id: int,
         translations: dict[str, str],
     ) -> int:
-        """Cache AI translations by (project_id, hash); returns inserted."""
+        """按 (project_id, hash) 缓存 AI 翻译；返回实际插入数。"""
 
         now = datetime.now(timezone.utc).isoformat()
         inserted = 0
@@ -496,7 +494,7 @@ class DevLogDB:
         project_id: int,
         hashes: list[str] | None = None,
     ) -> dict[str, str]:
-        """Return cached translations for a project (optionally filtered)."""
+        """返回某项目的翻译缓存（可按 hash 列表过滤）。"""
 
         if hashes is not None and not hashes:
             return {}
@@ -514,7 +512,7 @@ class DevLogDB:
         return {str(row[0]): str(row[1]) for row in rows}
 
     # ------------------------------------------------------------------
-    # Scan cursor
+    # 扫描游标
     # ------------------------------------------------------------------
 
     def update_scan_cursor(self, project_id: int, commit_hash: str) -> None:
@@ -532,11 +530,11 @@ class DevLogDB:
         return None if row is None else row[0]
 
     # ------------------------------------------------------------------
-    # Review drafts
+    # 复盘草稿
     # ------------------------------------------------------------------
 
     def save_review_draft(self, project_id: int, draft: ReviewDraft) -> int:
-        """Persist a generated draft with all claims; returns the draft id."""
+        """持久化一份生成的草稿及其全部论断；返回草稿 id。"""
 
         row = self._conn.execute(
             "SELECT id FROM projects WHERE id = ?", (project_id,)
@@ -579,7 +577,7 @@ class DevLogDB:
     def list_review_drafts(
         self, project_id: int | None = None
     ) -> list[ReviewDraftSummary]:
-        """Return draft summaries, newest first, for one project or all."""
+        """返回草稿摘要（新的在前），可按项目过滤或返回全部。"""
 
         if project_id is None:
             rows = self._conn.execute(
@@ -595,7 +593,7 @@ class DevLogDB:
         return [self._summarize_draft(record) for record in records]
 
     def load_review_draft(self, draft_id: int) -> StoredReviewDraft:
-        """Load one draft with project context and ordered claims."""
+        """加载一份草稿：包含项目上下文与按顺序排列的论断。"""
 
         row = self._conn.execute(
             "SELECT d.id, d.project_id, p.name, p.path, "
@@ -653,7 +651,7 @@ class DevLogDB:
         claim_id: int,
         note: str | None = None,
     ) -> bool:
-        """Mark one ai_pending claim as confirmed. Facts cannot be changed."""
+        """把一条 ai_pending 论断标记为已确认。事实论断不可修改。"""
 
         sql = "UPDATE review_claims SET status = 'confirmed'"
         params: list[object] = []
@@ -668,7 +666,7 @@ class DevLogDB:
         return cursor.rowcount == 1
 
     def confirm_all_ai_claims(self, draft_id: int) -> int:
-        """Confirm every ai_pending claim in a draft."""
+        """确认某草稿中所有 ai_pending 论断。"""
 
         cursor = self._conn.execute(
             "UPDATE review_claims SET status = 'confirmed' "
@@ -679,7 +677,7 @@ class DevLogDB:
         return cursor.rowcount
 
     def mark_draft_exported(self, draft_id: int, path: str | Path) -> None:
-        """Remember where the draft was last exported."""
+        """记录草稿最后导出到哪个文件。"""
 
         self._conn.execute(
             "UPDATE review_drafts SET exported_path = ? WHERE id = ?",
@@ -713,11 +711,11 @@ class DevLogDB:
         )
 
     # ------------------------------------------------------------------
-    # Daily notes (memory layer)
+    # 每日笔记（记忆层）
     # ------------------------------------------------------------------
 
     def upsert_daily_note(self, project_id: int, note: DailyNote) -> int:
-        """Insert or update the single note for (project, note_date)."""
+        """插入或更新 (project, note_date) 对应的唯一一条笔记。"""
 
         self.get_project(project_id)
         now = datetime.now(timezone.utc).isoformat()
@@ -755,7 +753,7 @@ class DevLogDB:
         project_id: int,
         note_date: date,
     ) -> StoredDailyNote | None:
-        """Return one day's note or None when it has not been written yet."""
+        """返回某一天的笔记；还没写时返回 None。"""
 
         row = self._conn.execute(
             "SELECT id, project_id, note_date, summary, issues, plan, "
@@ -773,7 +771,7 @@ class DevLogDB:
         since: date | None = None,
         until: date | None = None,
     ) -> list[StoredDailyNote]:
-        """Return notes newest first, optionally limited to a date range."""
+        """返回笔记（日期新的在前），可按日期范围过滤。"""
 
         sql = (
             "SELECT id, project_id, note_date, summary, issues, plan, "
@@ -791,11 +789,11 @@ class DevLogDB:
         return [self._row_to_daily_note(row) for row in rows]
 
     # ------------------------------------------------------------------
-    # Bug records (memory layer)
+    # Bug 记录（记忆层）
     # ------------------------------------------------------------------
 
     def create_bug_record(self, project_id: int, bug: BugRecord) -> int:
-        """Persist one bug scene snapshot and return its id."""
+        """持久化一条 Bug 现场快照并返回其 id。"""
 
         self.get_project(project_id)
         now = datetime.now(timezone.utc).isoformat()
@@ -826,7 +824,7 @@ class DevLogDB:
         return int(cursor.lastrowid)
 
     def get_bug_record(self, bug_id: int) -> StoredBugRecord:
-        """Load one bug record by id, or raise a friendly DatabaseError."""
+        """按 id 加载一条 Bug 记录；不存在时抛出友好的 DatabaseError。"""
 
         row = self._conn.execute(
             "SELECT id, project_id, title, title_source, error_text, "
@@ -844,7 +842,7 @@ class DevLogDB:
         project_id: int,
         status: BugStatus | None = None,
     ) -> list[StoredBugRecord]:
-        """Return bug records newest first, optionally filtered by status."""
+        """返回 Bug 记录（新的在前），可按状态过滤。"""
 
         sql = (
             "SELECT id, project_id, title, title_source, error_text, "
@@ -870,7 +868,7 @@ class DevLogDB:
         solution: str | None = None,
         status: BugStatus | None = None,
     ) -> bool:
-        """Update human annotations on a bug; the scene snapshot is fixed."""
+        """更新用户在 Bug 上补充的内容；现场快照保持不可变。"""
 
         if title_source is not None and title_source not in ("manual", "ai"):
             raise ValueError(f"unknown title_source: {title_source}")
@@ -905,7 +903,7 @@ class DevLogDB:
         return cursor.rowcount == 1
 
     def delete_bug_record(self, bug_id: int) -> bool:
-        """Remove one bug record; returns True when it existed."""
+        """删除一条 Bug 记录；存在时返回 True。"""
 
         cursor = self._conn.execute(
             "DELETE FROM bug_records WHERE id = ?", (bug_id,)
@@ -914,7 +912,7 @@ class DevLogDB:
         return cursor.rowcount == 1
 
     # ------------------------------------------------------------------
-    # Commit annotations (memory layer)
+    # commit 批注（记忆层）
     # ------------------------------------------------------------------
 
     def add_commit_annotation(
@@ -922,7 +920,7 @@ class DevLogDB:
         project_id: int,
         annotation: CommitAnnotation,
     ) -> int:
-        """Attach a note to a commit already cached for this project."""
+        """把一条批注挂到本项目已缓存的 commit 上。"""
 
         known = self._conn.execute(
             "SELECT id FROM commits WHERE project_id = ? AND hash = ?",
@@ -956,7 +954,7 @@ class DevLogDB:
         project_id: int,
         commit_hash: str | None = None,
     ) -> list[StoredCommitAnnotation]:
-        """Return annotations for a project, newest first."""
+        """返回某项目的批注（新的在前）。"""
 
         sql = (
             "SELECT id, project_id, commit_hash, kind, body, "
@@ -975,10 +973,10 @@ class DevLogDB:
         self,
         project_id: int,
     ) -> list[StoredCommitAnnotation]:
-        """Return annotations whose commit no longer exists for the project.
+        """返回 commit 在本项目中已不存在的批注。
 
-        History rewrites (rebase / force push) can remove the original
-        hash; those notes are kept and reported instead of silently lost.
+        历史被改写（rebase / force push）可能移除原 hash；这些笔记会被
+        保留并列出，而不是被悄悄丢失。
         """
 
         rows = self._conn.execute(
@@ -1002,7 +1000,7 @@ class DevLogDB:
         kind: AnnotationKind | None = None,
         body: str | None = None,
     ) -> bool:
-        """Edit the kind or body of one annotation."""
+        """编辑一条批注的 kind 或正文。"""
 
         assignments: list[str] = []
         params: list[object] = []
@@ -1030,7 +1028,7 @@ class DevLogDB:
         return cursor.rowcount == 1
 
     def delete_commit_annotation(self, annotation_id: int) -> bool:
-        """Remove one annotation; returns True when it existed."""
+        """删除一条批注；存在时返回 True。"""
 
         cursor = self._conn.execute(
             "DELETE FROM commit_annotations WHERE id = ?", (annotation_id,)
@@ -1039,12 +1037,12 @@ class DevLogDB:
         return cursor.rowcount == 1
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 内部辅助方法
     # ------------------------------------------------------------------
 
     @staticmethod
     def _row_to_event(row: sqlite3.Row | tuple) -> CommitEvent:
-        # Columns: project_id, hash, short_hash, author_name, author_email,
+        # 列顺序：project_id, hash, short_hash, author_name, author_email,
         # committed_at, message_subject, files_changed, insertions,
         # deletions, parents_count, noise_type
         return CommitEvent(
@@ -1063,7 +1061,7 @@ class DevLogDB:
 
     @staticmethod
     def _row_to_daily_note(row: sqlite3.Row | tuple) -> StoredDailyNote:
-        # Columns: id, project_id, note_date, summary, issues, plan,
+        # 列顺序：id, project_id, note_date, summary, issues, plan,
         # created_at, updated_at
         return StoredDailyNote(
             id=int(row[0]),
@@ -1080,7 +1078,7 @@ class DevLogDB:
 
     @staticmethod
     def _row_to_bug_record(row: sqlite3.Row | tuple) -> StoredBugRecord:
-        # Columns: id, project_id, title, title_source, error_text,
+        # 列顺序：id, project_id, title, title_source, error_text,
         # environment, git_head, git_status, status, root_cause, solution,
         # captured_at, updated_at
         return StoredBugRecord(
@@ -1103,7 +1101,7 @@ class DevLogDB:
 
     @staticmethod
     def _row_to_annotation(row: sqlite3.Row | tuple) -> StoredCommitAnnotation:
-        # Columns: id, project_id, commit_hash, kind, body, created_at,
+        # 列顺序：id, project_id, commit_hash, kind, body, created_at,
         # updated_at
         return StoredCommitAnnotation(
             id=int(row[0]),

@@ -1,12 +1,12 @@
-"""Deterministic rule-based theme clustering for DevLog V1.
+"""DevLog V1 的确定性规则版主题聚类。
 
-Design notes:
-- Noise commits (wip/chore/merge/revert) never enter themes, but they are
-  not deleted: the caller keeps the full event list separately.
-- A theme's "prototype tokens" come from the first commit's subject.
-  Later commits join while they share at least one meaningful token.
-- Interleaved work (A B A) produces separate themes in V1; merging is
-  future work (file-overlap weighting or LLM-assisted clustering).
+设计说明：
+- 噪音 commit（wip/chore/merge/revert）永远不进入主题，但不会被删除：
+  调用方另行保留完整事件列表。
+- 主题的“原型词元”来自第一条 commit 的 subject；后续 commit 只要与
+  原型词元共享至少一个有意义词元就加入该主题。
+- 交错开发（A B A）在 V1 中会产生多个独立主题；合并是未来工作
+  （文件重叠权重或 LLM 辅助聚类）。
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ _KIND_BY_PREFIX = {
 
 
 def _subject_tokens(subject: str) -> set[str]:
-    """Return meaningful lowercase tokens from a commit subject."""
+    """从 commit subject 中提取有意义的小写词元。"""
 
     lowered = subject.strip().lower()
     lowered = _CONVENTIONAL_PREFIX.sub("", lowered)
@@ -69,10 +69,10 @@ def cluster_themes(
     events: list[CommitEvent],
     silence_threshold_days: int = 3,
 ) -> ClusterResult:
-    """Group non-noise commits into themes and report silence periods.
+    """把非噪音 commit 分组成主题，并报告静默期。
 
-    Noise commits are ignored for clustering and for silence detection,
-    so a wip in the middle of one feature does not split the theme.
+    聚类与静默期检测都会忽略噪音 commit，因此某个功能中间的 wip
+    不会把主题拆开。
     """
 
     meaningful = [

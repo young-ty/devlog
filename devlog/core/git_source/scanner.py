@@ -1,4 +1,4 @@
-"""Scan a local Git repository and return normalized CommitEvent items."""
+"""扫描本地 Git 仓库，返回规范化后的 CommitEvent 列表。"""
 
 from __future__ import annotations
 
@@ -14,11 +14,11 @@ FIELD_SEP = "\x1f"
 
 
 class GitSourceError(RuntimeError):
-    """Raised when a repository cannot be scanned."""
+    """当仓库无法扫描时抛出。"""
 
 
 def _classify_noise(subject: str, parents_count: int) -> NoiseType:
-    """Classify low-signal commits (merge/revert/wip/chore)."""
+    """把低信号 commit 分类（merge/revert/wip/chore）。"""
 
     if parents_count > 1:
         return NoiseType.MERGE
@@ -34,7 +34,7 @@ def _classify_noise(subject: str, parents_count: int) -> NoiseType:
 
 
 def _parse_git_log_output(output: str) -> list[CommitEvent]:
-    """Parse combined git log (format + numstat) output into events."""
+    """把 git log（format + numstat）的合并输出解析成事件。"""
 
     events: list[CommitEvent] = []
     for chunk in output.split(RECORD_SEP):
@@ -62,7 +62,7 @@ def _parse_git_log_output(output: str) -> list[CommitEvent]:
         insertions = 0
         deletions = 0
 
-        # Remaining lines are numstat entries: "<added>\t<removed>\t<path>"
+        # 剩余行是 numstat 条目："<新增>\t<删除>\t<路径>"
         for line in lines[1:]:
             parts = line.split("\t")
             if len(parts) < 3:
@@ -97,10 +97,10 @@ def scan_repository(
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> list[CommitEvent]:
-    """Return all commits of a repository as CommitEvent, oldest first.
+    """返回仓库全部 commit（按时间从旧到新排列）为 CommitEvent。
 
-    since/until filter on the commit timestamp (inclusive). Both values
-    should be timezone-aware to compare reliably with git timestamps.
+    since/until 对 commit 时间戳做包含式过滤；两者都应带时区，
+    才能与 git 时间戳可靠比较。
     """
 
     repo = Path(repo_path).expanduser().resolve()

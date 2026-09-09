@@ -31,7 +31,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         detail = body.detail;
       }
     } catch {
-      // response is not JSON; keep the generic message
+      // 响应不是 JSON；保留通用错误信息
     }
     throw new ApiError(response.status, detail);
   }

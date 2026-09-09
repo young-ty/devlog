@@ -1,4 +1,4 @@
-"""Run the golden-set evaluation and summarize per-case metrics."""
+"""运行金标准评测，并汇总每个用例的指标。"""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def run_offline(
     cases: list[EvalCase],
     threshold: float = DEFAULT_THRESHOLD,
 ) -> EvalReport:
-    """Score the deterministic rule-based baseline (no API calls)."""
+    """给确定性规则基线评分（不调用 API）。"""
 
     results = [
         _candidate_case(case, rule_based_summary(case.theme))
@@ -78,7 +78,7 @@ def llm_judge(
     candidate: ThemeSummary,
     gold: ThemeSummary,
 ) -> int:
-    """Ask a second model to score candidate quality from 1 to 5."""
+    """让第二个模型从 1 到 5 给候选摘要质量打分。"""
 
     prompt = (
         "候选摘要：\n"
@@ -101,7 +101,7 @@ def run_online(
     client: LLMClientBase,
     threshold: float = DEFAULT_THRESHOLD,
 ) -> EvalReport:
-    """Generate candidates with DeepSeek and judge them with another call."""
+    """用 DeepSeek 生成候选摘要，再用另一次调用做裁判打分。"""
 
     results: list[CaseResult] = []
     for case in cases:
@@ -148,7 +148,7 @@ def _print_report(report: EvalReport) -> None:
 
 
 def run_cli(argv: list[str] | None = None) -> int:
-    """Entry point for ``python -m devlog.eval``."""
+    """``python -m devlog.eval`` 的入口。"""
 
     parser = argparse.ArgumentParser(
         prog="devlog-eval",

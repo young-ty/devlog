@@ -1,4 +1,4 @@
-"""Assemble events, themes and AI summaries into a review draft."""
+"""把事件、主题和 AI 摘要组装成一份复盘草稿。"""
 
 from __future__ import annotations
 
@@ -35,15 +35,14 @@ def build_review_draft(
     silence_periods: list[SilencePeriod],
     factual_summaries: bool = False,
 ) -> ReviewDraft:
-    """Build a structured draft from facts and AI summaries.
+    """基于事实与 AI 摘要构建结构化草稿。
 
-    AI-produced content is always marked ai_pending. Sections whose answers
-    only the developer knows (decisions, lessons, assets, next steps) get
-    guided questions instead of fabricated statements.
+    AI 产生的内容一律标记为 ai_pending（待确认）。只有开发者本人
+    才知道答案的板块（决策、踩坑、可复用资产、下一步）会生成引导
+    问题，而不是编造陈述。
 
-    factual_summaries=True marks theme summaries as facts, which is used
-    by the offline CLI mode where summaries are derived from commit data
-    by rules instead of by an LLM.
+    factual_summaries=True 会把主题摘要标记为事实，用于离线 CLI
+    模式——该模式下摘要是按规则从 commit 数据推导的，而不是由 LLM 生成。
     """
 
     if len(theme_summaries) != len(themes):

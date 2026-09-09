@@ -1,4 +1,4 @@
-"""SQLite state store for projects, events and review drafts."""
+"""项目、事件与复盘草稿的 SQLite 状态存储。"""
 
 from devlog.core.storage.database import (
     DevLogDB,

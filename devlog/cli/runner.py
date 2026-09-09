@@ -1,8 +1,7 @@
-"""Business orchestration shared by the CLI and, later, the local API.
+"""CLI 与（后续的）本地 API 共用的业务编排。
 
-These functions know nothing about argparse: they receive a database and
-paths/options and return plain result objects. main.py only translates
-terminal input into calls here and prints the results back.
+这些函数完全不知道 argparse：它们接收数据库与路径/选项，返回普通结果
+对象。main.py 只负责把终端输入翻译成这里的调用并打印结果。
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from devlog.core.theming.models import SilencePeriod, Theme
 
 
 class CLIUsageError(ValueError):
-    """Raised when the requested action cannot be performed."""
+    """当请求的动作无法执行时抛出。"""
 
 
 @dataclass(frozen=True)
@@ -99,7 +98,7 @@ def _resolve(path: str | Path | None) -> Path:
 
 
 def _assert_git_repo(repo: Path) -> None:
-    """Raise a friendly error when a path is not a Git working tree."""
+    """路径不是 Git 工作区时抛出友好错误。"""
 
     if not repo.is_dir():
         raise CLIUsageError(f"路径不存在或不是目录：{repo}")
@@ -123,7 +122,7 @@ def cmd_init(
     path: str | Path | None,
     name: str | None = None,
 ) -> InitResult:
-    """Register a repository; registering the same path twice is a no-op."""
+    """注册一个仓库；重复注册同一路径不会产生副作用。"""
 
     repo = _resolve(path)
     _assert_git_repo(repo)
@@ -141,7 +140,7 @@ def cmd_scan(
     path: str | Path | None,
     reset: bool = False,
 ) -> ScanResult:
-    """Scan the full Git history into the cache database."""
+    """把完整 Git 历史扫描进缓存数据库。"""
 
     repo = _resolve(path)
     _assert_git_repo(repo)
@@ -173,7 +172,7 @@ def cmd_review_generate(
     until: datetime | None = None,
     offline: bool = False,
 ) -> GenerateResult:
-    """Assemble, persist and summarize one structured review draft."""
+    """组装、持久化并汇总一份结构化复盘草稿。"""
 
     repo = _resolve(path)
     _assert_git_repo(repo)
@@ -244,7 +243,7 @@ def cmd_review_list(
     db: DevLogDB,
     path: str | Path | None = None,
 ) -> list[ReviewDraftSummary]:
-    """Return draft summaries for a project (all projects when no path)."""
+    """返回某项目的草稿摘要（未给路径时返回全部项目）。"""
 
     summaries = db.list_review_drafts()
     if path is None:
@@ -254,7 +253,7 @@ def cmd_review_list(
 
 
 def cmd_timeline(db: DevLogDB, project_id: int) -> TimelineResult:
-    """Return the cached commit timeline and its rule-based theme view."""
+    """返回缓存的 commit 时间线及其规则版主题视图。"""
 
     project = db.get_project(project_id)
     events = db.list_events(project_id, include_noise=True)
@@ -277,7 +276,7 @@ def cmd_timeline(db: DevLogDB, project_id: int) -> TimelineResult:
 
 
 def cmd_translate_commits(db: DevLogDB, project_id: int) -> TranslationResult:
-    """Translate untranslated cached commit subjects and cache them."""
+    """翻译尚未翻译的缓存 commit subject，并把结果缓存。"""
 
     project = db.get_project(project_id)
     events = db.list_events(project_id, include_noise=True)
@@ -317,7 +316,7 @@ def cmd_translate_commits(db: DevLogDB, project_id: int) -> TranslationResult:
 
 
 def cmd_review_show(db: DevLogDB, draft_id: int) -> StoredReviewDraft:
-    """Load one draft with its claims, for review/confirmation."""
+    """加载一份草稿及其论断，供查看/确认使用。"""
 
     return db.load_review_draft(draft_id)
 
@@ -329,7 +328,7 @@ def cmd_review_confirm(
     confirm_all: bool = False,
     note: str | None = None,
 ) -> ConfirmResult:
-    """Confirm one or all ai_pending claims. Facts cannot be confirmed."""
+    """确认一条或多条 ai_pending 论断。事实论断不可被确认。"""
 
     if not confirm_all and not claim_ids:
         raise CLIUsageError("请至少指定一个论断 ID，或使用 --all")
@@ -376,7 +375,7 @@ def cmd_review_export(
     draft_id: int,
     output: str | Path | None = None,
 ) -> Path:
-    """Render a draft to Markdown and remember where it was exported."""
+    """把草稿渲染为 Markdown，并记录导出位置。"""
 
     record = db.load_review_draft(draft_id)
     if not record.draft.claims:

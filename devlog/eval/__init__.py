@@ -1,1 +1,1 @@
-"""Golden-set evaluation for AI-generated theme summaries."""
+"""基于人工标注金标准评测 AI 生成的主题摘要。"""
