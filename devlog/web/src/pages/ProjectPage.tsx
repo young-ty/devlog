@@ -15,6 +15,8 @@ interface ProjectPageProps {
   onBack: () => void;
   onOpenTimeline: () => void;
   onOpenReview: (draftId: number) => void;
+  onOpenNotes: () => void;
+  onOpenBugs: () => void;
 }
 
 export function ProjectPage({
@@ -24,6 +26,8 @@ export function ProjectPage({
   onBack,
   onOpenTimeline,
   onOpenReview,
+  onOpenNotes,
+  onOpenBugs,
 }: ProjectPageProps) {
   const [reviews, setReviews] = useState<ReviewSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,6 +223,21 @@ export function ProjectPage({
             api_key（或设置环境变量 DEEPSEEK_API_KEY）。
           </p>
         )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>日常记忆</h2>
+          <span className="panel-hint">
+            开发中的随手记录与 Bug 现场，都是完工复盘的材料
+          </span>
+        </div>
+        <div className="actions">
+          <button onClick={onOpenNotes}>写每日复盘</button>
+          <button className="secondary" onClick={onOpenBugs}>
+            Bug 清单
+          </button>
+        </div>
       </section>
 
       <section className="section">

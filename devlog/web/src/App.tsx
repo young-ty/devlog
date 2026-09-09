@@ -3,6 +3,8 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ReviewPage } from "./pages/ReviewPage";
 import { TimelinePage } from "./pages/TimelinePage";
+import { NotesPage } from "./pages/NotesPage";
+import { BugsPage } from "./pages/BugsPage";
 
 type View =
   | { name: "projects" }
@@ -21,6 +23,18 @@ type View =
     }
   | {
       name: "timeline";
+      projectId: number;
+      projectName: string;
+      projectPath: string;
+    }
+  | {
+      name: "notes";
+      projectId: number;
+      projectName: string;
+      projectPath: string;
+    }
+  | {
+      name: "bugs";
       projectId: number;
       projectName: string;
       projectPath: string;
@@ -87,11 +101,59 @@ export default function App() {
             projectPath: view.projectPath,
           })
         }
+        onOpenNotes={() =>
+          setView({
+            name: "notes",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
+        onOpenBugs={() =>
+          setView({
+            name: "bugs",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
       />
     );
   } else if (view.name === "timeline") {
     page = (
       <TimelinePage
+        projectId={view.projectId}
+        projectName={view.projectName}
+        projectPath={view.projectPath}
+        onBack={() =>
+          setView({
+            name: "project",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
+      />
+    );
+  } else if (view.name === "notes") {
+    page = (
+      <NotesPage
+        projectId={view.projectId}
+        projectName={view.projectName}
+        projectPath={view.projectPath}
+        onBack={() =>
+          setView({
+            name: "project",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+          })
+        }
+      />
+    );
+  } else if (view.name === "bugs") {
+    page = (
+      <BugsPage
         projectId={view.projectId}
         projectName={view.projectName}
         projectPath={view.projectPath}

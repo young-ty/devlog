@@ -27,6 +27,8 @@ class WebSmokeTests(unittest.TestCase):
             "src/pages/ProjectPage.tsx",
             "src/pages/ReviewPage.tsx",
             "src/pages/TimelinePage.tsx",
+            "src/pages/NotesPage.tsx",
+            "src/pages/BugsPage.tsx",
         ):
             self.assertTrue(
                 (WEB_DIR / relative).exists(),
@@ -36,6 +38,10 @@ class WebSmokeTests(unittest.TestCase):
         package_text = (WEB_DIR / "package.json").read_text(encoding="utf-8")
         self.assertIn('"vite"', package_text)
         self.assertIn('"react"', package_text)
+
+        app_text = (WEB_DIR / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertIn("import { NotesPage }", app_text)
+        self.assertIn("import { BugsPage }", app_text)
 
     def test_memory_layer_api_bindings_exist(self) -> None:
         api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
