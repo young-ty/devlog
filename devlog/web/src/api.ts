@@ -1,5 +1,14 @@
 import type {
+  AnnotationCreateInput,
+  AnnotationUpdateInput,
+  BugCaptureInput,
+  BugRecord,
+  BugStatus,
+  BugUpdateInput,
+  CommitAnnotation,
   ConfirmResult,
+  DailyNote,
+  DailyNoteInput,
   ExportResult,
   GenerateResult,
   InitResult,
@@ -9,6 +18,8 @@ import type {
   ReviewDraft,
   ReviewSummary,
   ScanResult,
+  SuggestTitleInput,
+  SuggestTitleResult,
   TranslationResult,
 } from "./types";
 
@@ -44,6 +55,19 @@ function jsonInit(method: string, body?: unknown): RequestInit {
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   };
+}
+
+function queryString(
+  params: Record<string, string | boolean | undefined>,
+): string {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      search.set(key, String(value));
+    }
+  });
+  const text = search.toString();
+  return text ? `?${text}` : "";
 }
 
 export function listProjects(): Promise<Project[]> {
@@ -133,5 +157,110 @@ export function exportReview(draftId: number): Promise<ExportResult> {
   return request<ExportResult>(
     `/api/reviews/${draftId}/export`,
     jsonInit("POST", {}),
+  );
+}
+
+export function listDailyNotes(
+  projectId: number,
+  noteDate?: string,
+): Promise<DailyNote[]> {
+  return request<DailyNote[]>(
+    `/api/projects/${projectId}/notes${queryString({
+      note_date: noteDate,
+    })}`,
+  );
+}
+
+export function saveDailyNote(
+  projectId: number,
+  payload: DailyNoteInput,
+): Promise<DailyNote> {
+  return request<DailyNote>(
+    `/api/projects/${projectId}/notes`,
+    jsonInit("POST", payload),
+  );
+}
+
+export function listBugs(
+  projectId: number,
+  status?: BugStatus,
+): Promise<BugRecord[]> {
+  return request<BugRecord[]>(
+    `/api/projects/${projectId}/bugs${queryString({ status })}`,
+  );
+}
+
+export function captureBug(
+  projectId: number,
+  payload: BugCaptureInput,
+): Promise<BugRecord> {
+  return request<BugRecord>(
+    `/api/projects/${projectId}/bugs`,
+    jsonInit("POST", payload),
+  );
+}
+
+export function updateBug(
+  bugId: number,
+  payload: BugUpdateInput,
+): Promise<BugRecord> {
+  return request<BugRecord>(`/api/bugs/${bugId}`, jsonInit("PATCH", payload));
+}
+
+export function deleteBug(bugId: number): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(
+    `/api/bugs/${bugId}`,
+    jsonInit("DELETE"),
+  );
+}
+
+export function suggestBugTitle(
+  payload: SuggestTitleInput,
+): Promise<SuggestTitleResult> {
+  return request<SuggestTitleResult>(
+    "/api/bugs/suggest-title",
+    jsonInit("POST", payload),
+  );
+}
+
+export function listAnnotations(
+  projectId: number,
+  options: { commitHash?: string; orphan?: boolean } = {},
+): Promise<CommitAnnotation[]> {
+  return request<CommitAnnotation[]>(
+    `/api/projects/${projectId}/annotations${queryString({
+      commit_hash: options.commitHash,
+      orphan: options.orphan,
+    })}`,
+  );
+}
+
+export function addAnnotation(
+  projectId: number,
+  commitHash: string,
+  payload: AnnotationCreateInput,
+): Promise<CommitAnnotation> {
+  return request<CommitAnnotation>(
+    `/api/projects/${projectId}/commits/${commitHash}/annotations`,
+    jsonInit("POST", payload),
+  );
+}
+
+export function updateAnnotation(
+  annotationId: number,
+  payload: AnnotationUpdateInput,
+): Promise<CommitAnnotation> {
+  return request<CommitAnnotation>(
+    `/api/annotations/${annotationId}`,
+    jsonInit("PATCH", payload),
+  );
+}
+
+export function deleteAnnotation(
+  annotationId: number,
+): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(
+    `/api/annotations/${annotationId}`,
+    jsonInit("DELETE"),
   );
 }

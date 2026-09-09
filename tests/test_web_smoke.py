@@ -37,6 +37,41 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn('"vite"', package_text)
         self.assertIn('"react"', package_text)
 
+    def test_memory_layer_api_bindings_exist(self) -> None:
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        for function_name in (
+            "listDailyNotes",
+            "saveDailyNote",
+            "listBugs",
+            "captureBug",
+            "updateBug",
+            "deleteBug",
+            "suggestBugTitle",
+            "listAnnotations",
+            "addAnnotation",
+            "updateAnnotation",
+            "deleteAnnotation",
+        ):
+            self.assertIn(
+                f"export function {function_name}(",
+                api_text,
+                f"missing api wrapper: {function_name}",
+            )
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        for type_name in (
+            "DailyNote",
+            "BugRecord",
+            "BugStatus",
+            "CommitAnnotation",
+            "AnnotationKind",
+        ):
+            self.assertIn(
+                type_name,
+                types_text,
+                f"missing memory type: {type_name}",
+            )
+
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")

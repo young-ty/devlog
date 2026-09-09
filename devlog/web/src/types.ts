@@ -138,3 +138,85 @@ export interface ConfirmResult {
 export interface ExportResult {
   path: string;
 }
+
+export type BugStatus = "open" | "root_cause_found" | "resolved";
+export type BugTitleSource = "manual" | "ai";
+
+export interface DailyNote {
+  id: number;
+  project_id: number;
+  note_date: string;
+  summary: string;
+  issues: string;
+  plan: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyNoteInput {
+  note_date: string;
+  summary: string;
+  issues: string;
+  plan: string;
+}
+
+export interface BugRecord {
+  id: number;
+  project_id: number;
+  title: string;
+  title_source: BugTitleSource;
+  error_text: string;
+  environment: string;
+  git_head: string;
+  git_status: string;
+  status: BugStatus;
+  root_cause: string;
+  solution: string;
+  captured_at: string;
+  updated_at: string;
+}
+
+export interface BugCaptureInput {
+  title?: string;
+  title_source?: BugTitleSource;
+  error_text: string;
+}
+
+export interface BugUpdateInput {
+  title?: string;
+  title_source?: BugTitleSource;
+  root_cause?: string;
+  solution?: string;
+  status?: BugStatus;
+}
+
+export interface SuggestTitleInput {
+  error_text: string;
+  environment?: string;
+}
+
+export interface SuggestTitleResult {
+  title: string;
+}
+
+export type AnnotationKind = "note" | "decision";
+
+export interface CommitAnnotation {
+  id: number;
+  project_id: number;
+  commit_hash: string;
+  kind: AnnotationKind;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnotationCreateInput {
+  kind: AnnotationKind;
+  body: string;
+}
+
+export interface AnnotationUpdateInput {
+  kind?: AnnotationKind;
+  body?: string;
+}
