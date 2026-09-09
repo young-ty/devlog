@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -226,3 +226,126 @@ class ExportRequest(BaseModel):
 
 class ExportResponse(BaseModel):
     path: str
+
+
+class DailyNoteRequest(BaseModel):
+    note_date: date
+    summary: str = ""
+    issues: str = ""
+    plan: str = ""
+
+
+class DailyNoteResponse(BaseModel):
+    id: int
+    project_id: int
+    note_date: date
+    summary: str
+    issues: str
+    plan: str
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_stored(cls, stored) -> "DailyNoteResponse":
+        note = stored.note
+        return cls(
+            id=stored.id,
+            project_id=stored.project_id,
+            note_date=note.note_date,
+            summary=note.summary,
+            issues=note.issues,
+            plan=note.plan,
+            created_at=stored.created_at,
+            updated_at=stored.updated_at,
+        )
+
+
+class BugCaptureRequest(BaseModel):
+    title: str | None = None
+    title_source: str = "manual"
+    error_text: str = ""
+
+
+class BugUpdateRequest(BaseModel):
+    title: str | None = None
+    title_source: str | None = None
+    root_cause: str | None = None
+    solution: str | None = None
+    status: str | None = None
+
+
+class BugResponse(BaseModel):
+    id: int
+    project_id: int
+    title: str
+    title_source: str
+    error_text: str
+    environment: str
+    git_head: str
+    git_status: str
+    status: str
+    root_cause: str
+    solution: str
+    captured_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_stored(cls, stored) -> "BugResponse":
+        bug = stored.bug
+        return cls(
+            id=stored.id,
+            project_id=stored.project_id,
+            title=bug.title,
+            title_source=bug.title_source,
+            error_text=bug.error_text,
+            environment=bug.environment,
+            git_head=bug.git_head,
+            git_status=bug.git_status,
+            status=bug.status.value,
+            root_cause=bug.root_cause,
+            solution=bug.solution,
+            captured_at=stored.captured_at,
+            updated_at=stored.updated_at,
+        )
+
+
+class BugSuggestTitleRequest(BaseModel):
+    error_text: str
+    environment: str = ""
+
+
+class BugSuggestTitleResponse(BaseModel):
+    title: str
+
+
+class AnnotationCreateRequest(BaseModel):
+    kind: str = "note"
+    body: str
+
+
+class AnnotationUpdateRequest(BaseModel):
+    kind: str | None = None
+    body: str | None = None
+
+
+class AnnotationResponse(BaseModel):
+    id: int
+    project_id: int
+    commit_hash: str
+    kind: str
+    body: str
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_stored(cls, stored) -> "AnnotationResponse":
+        annotation = stored.annotation
+        return cls(
+            id=stored.id,
+            project_id=stored.project_id,
+            commit_hash=annotation.commit_hash,
+            kind=annotation.kind.value,
+            body=annotation.body,
+            created_at=stored.created_at,
+            updated_at=stored.updated_at,
+        )

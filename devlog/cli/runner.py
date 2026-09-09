@@ -8,14 +8,26 @@ from __future__ import annotations
 
 import re
 import subprocess
+import platform
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
+from devlog.core.capture.models import (
+    AnnotationKind,
+    BugRecord,
+    BugStatus,
+    CommitAnnotation,
+    DailyNote,
+)
 from devlog.core.git_source.scanner import GitSourceError, scan_repository
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.deepseek import DeepSeekClient
-from devlog.core.llm.themes import rule_based_summary, summarize_theme
+from devlog.core.llm.themes import (
+    complete_json_with_retry,
+    rule_based_summary,
+    summarize_theme,
+)
 from devlog.core.llm.translation import translate_commit_subjects
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import write_markdown
@@ -23,6 +35,9 @@ from devlog.core.review.models import ClaimStatus
 from devlog.core.storage.database import (
     DevLogDB,
     ReviewDraftSummary,
+    StoredBugRecord,
+    StoredCommitAnnotation,
+    StoredDailyNote,
     StoredReviewDraft,
 )
 from devlog.core.theming.cluster import cluster_themes
@@ -385,3 +400,228 @@ def cmd_review_export(
     written = write_markdown(record.draft, target)
     db.mark_draft_exported(draft_id, written)
     return written
+
+
+# ----------------------------------------------------------------------
+# 记忆层：每日笔记 / Bug 捕获 / commit 批注
+# ----------------------------------------------------------------------
+
+_TITLE_HINT_WORDS = (
+    "error",
+    "exception",
+    "traceback",
+    "failed",
+    "fatal",
+    "cannot",
+    "undefined",
+    "refused",
+    "invalid",
+)
+
+
+def _fallback_bug_title(title: str, error_text: str) -> str:
+    """没给标题时，从报错文本里挑一句最像错误信息的话。"""
+
+    if title and title.strip():
+        return title.strip()
+    meaningful = [line.strip() for line in error_text.splitlines() if line.strip()]
+    for line in meaningful:
+        lowered = line.lower()
+        if any(word in lowered for word in _TITLE_HINT_WORDS):
+            return line[:80]
+    return meaningful[-1][:80] if meaningful else "未命名 Bug"
+
+
+def _environment_summary() -> str:
+    """采集运行环境摘要（操作系统 + Python 版本）。"""
+
+    return (
+        f"{platform.system()} {platform.release()}, "
+        f"Python {platform.python_version()}"
+    )
+
+
+def _git_snapshot(repo: Path) -> tuple[str, str]:
+    """尽力采集 git 现场（HEAD + 工作区摘要），失败也不抛错。"""
+
+    def run(*args: str) -> str:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo), *args],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+        except OSError:
+            return ""
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    head = run("rev-parse", "HEAD")
+    short = run("rev-parse", "--short", "HEAD")
+    git_head = f"{head} ({short})" if head and short else head
+
+    porcelain = run("status", "--porcelain")
+    lines = [line for line in porcelain.splitlines() if line.strip()]
+    if not lines:
+        git_status = "clean"
+    else:
+        changed = sum(1 for line in lines if not line.startswith("??"))
+        untracked = sum(1 for line in lines if line.startswith("??"))
+        git_status = f"{changed} files changed, {untracked} untracked"
+    return git_head, git_status
+
+
+def cmd_daily_note_save(
+    db: DevLogDB,
+    project_id: int,
+    note: DailyNote,
+) -> StoredDailyNote:
+    """保存（有则更新）某一天的项目笔记，并返回持久化结果。"""
+
+    db.upsert_daily_note(project_id, note)
+    stored = db.get_daily_note(project_id, note.note_date)
+    if stored is None:
+        raise DatabaseError("每日笔记保存后读取失败")
+    return stored
+
+
+def cmd_daily_note_list(
+    db: DevLogDB,
+    project_id: int,
+    since: date | None = None,
+    until: date | None = None,
+) -> list[StoredDailyNote]:
+    """列出某个项目的每日笔记，新的在前。"""
+
+    return db.list_daily_notes(project_id, since=since, until=until)
+
+
+def cmd_bug_capture(
+    db: DevLogDB,
+    project_id: int,
+    title: str = "",
+    error_text: str = "",
+    title_source: str = "manual",
+) -> StoredBugRecord:
+    """捕获一条 Bug：自动采集环境与 Git 现场，标题缺失时自动兜底。"""
+
+    project = db.get_project(project_id)
+    repo = Path(project.path)
+    git_head, git_status = _git_snapshot(repo)
+    resolved_title = _fallback_bug_title(title, error_text)
+    bug = BugRecord(
+        title=resolved_title,
+        title_source=title_source,
+        error_text=error_text,
+        environment=_environment_summary(),
+        git_head=git_head,
+        git_status=git_status,
+    )
+    bug_id = db.create_bug_record(project_id, bug)
+    return db.get_bug_record(bug_id)
+
+
+def cmd_bug_list(
+    db: DevLogDB,
+    project_id: int,
+    status: BugStatus | None = None,
+) -> list[StoredBugRecord]:
+    """列出某项目的 Bug 记录，可按状态过滤。"""
+
+    return db.list_bug_records(project_id, status=status)
+
+
+def cmd_bug_update(
+    db: DevLogDB,
+    bug_id: int,
+    *,
+    title: str | None = None,
+    title_source: str | None = None,
+    root_cause: str | None = None,
+    solution: str | None = None,
+    status: BugStatus | None = None,
+) -> StoredBugRecord:
+    """更新 Bug 的人为补充字段；现场快照字段不可改。"""
+
+    db.update_bug_record(
+        bug_id,
+        title=title,
+        title_source=title_source,
+        root_cause=root_cause,
+        solution=solution,
+        status=status,
+    )
+    return db.get_bug_record(bug_id)
+
+
+def cmd_bug_delete(db: DevLogDB, bug_id: int) -> bool:
+    """删除一条 Bug 记录。"""
+
+    return db.delete_bug_record(bug_id)
+
+
+def cmd_suggest_bug_title(error_text: str, environment: str = "") -> str:
+    """让 DeepSeek 根据报错内容生成一句话中文标题建议。"""
+
+    client = DeepSeekClient()
+    prompt = (
+        "根据下面的报错与环境信息，生成一句 10~25 个字的简体中文 Bug "
+        "标题，概括问题本身，不写解决方案。只返回 JSON："
+        '{"title": "..."}\n\n'
+        f"环境信息：{environment or '未知'}\n\n报错内容：\n{error_text}"
+    )
+    data = complete_json_with_retry(client, prompt)
+    title = data.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise LLMError("AI 没有返回有效的标题建议")
+    return title.strip()
+
+
+def cmd_annotation_add(
+    db: DevLogDB,
+    project_id: int,
+    commit_hash: str,
+    kind: AnnotationKind,
+    body: str,
+) -> StoredCommitAnnotation:
+    """给某项目已缓存的 commit 添加一条批注。"""
+
+    annotation_id = db.add_commit_annotation(
+        project_id,
+        CommitAnnotation(commit_hash=commit_hash, kind=kind, body=body),
+    )
+    return db.get_commit_annotation(annotation_id)
+
+
+def cmd_annotation_list(
+    db: DevLogDB,
+    project_id: int,
+    commit_hash: str | None = None,
+    orphan: bool = False,
+) -> list[StoredCommitAnnotation]:
+    """列出项目批注；orphan=True 时只返回挂靠不上的孤儿批注。"""
+
+    if orphan:
+        return db.list_orphan_commit_annotations(project_id)
+    return db.list_commit_annotations(project_id, commit_hash=commit_hash)
+
+
+def cmd_annotation_update(
+    db: DevLogDB,
+    annotation_id: int,
+    *,
+    kind: AnnotationKind | None = None,
+    body: str | None = None,
+) -> StoredCommitAnnotation:
+    """编辑一条批注的 kind 或正文。"""
+
+    db.update_commit_annotation(annotation_id, kind=kind, body=body)
+    return db.get_commit_annotation(annotation_id)
+
+
+def cmd_annotation_delete(db: DevLogDB, annotation_id: int) -> bool:
+    """删除一条批注。"""
+
+    return db.delete_commit_annotation(annotation_id)

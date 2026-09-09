@@ -949,6 +949,21 @@ class DevLogDB:
         self._conn.commit()
         return int(cursor.lastrowid)
 
+    def get_commit_annotation(
+        self,
+        annotation_id: int,
+    ) -> StoredCommitAnnotation:
+        """按 id 加载一条批注；不存在时抛出友好的 DatabaseError。"""
+
+        row = self._conn.execute(
+            "SELECT id, project_id, commit_hash, kind, body, "
+            "created_at, updated_at FROM commit_annotations WHERE id = ?",
+            (annotation_id,),
+        ).fetchone()
+        if row is None:
+            raise DatabaseError(f"commit annotation not found: {annotation_id}")
+        return self._row_to_annotation(row)
+
     def list_commit_annotations(
         self,
         project_id: int,

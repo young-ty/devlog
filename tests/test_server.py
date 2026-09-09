@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from devlog.core.storage.database import DevLogDB
 from devlog.server.app import create_app
 
 
@@ -173,6 +174,15 @@ class APIFlowTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 404)
 
+            response = client.get("/api/projects/999/notes")
+            self.assertEqual(response.status_code, 404)
+
+            response = client.get("/api/projects/999/bugs")
+            self.assertEqual(response.status_code, 404)
+
+            response = client.get("/api/projects/999/annotations")
+            self.assertEqual(response.status_code, 404)
+
             response = client.get("/api/reviews/999")
             self.assertEqual(response.status_code, 404)
 
@@ -269,6 +279,189 @@ class APIFlowTests(unittest.TestCase):
         self.assertIn("model", body)
         self.assertIn("base_url", body)
         self.assertIsInstance(body["configured"], bool)
+
+
+class MemoryAPITests(unittest.TestCase):
+    """模块 10-2：记忆层 HTTP 接口测试（使用一次性仓库与数据库）。"""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root)
+        self.db_path = Path(self.root) / "memory-api.db"
+        commit(self.repo, "login.py", "def login(): ...\n", "feat: add login page", at(1))
+        commit(self.repo, "login.py", "def login(): return True\n", "fix: login button", at(2))
+        self.app = create_app(self.db_path)
+
+    def tearDown(self) -> None:
+        force_remove(self.root)
+
+    def _register_and_scan(self, client: TestClient) -> tuple[int, str]:
+        response = client.post("/api/projects", json={"path": str(self.repo)})
+        self.assertEqual(response.status_code, 201)
+        project_id = response.json()["project_id"]
+        response = client.post(f"/api/projects/{project_id}/scan", json={})
+        self.assertEqual(response.status_code, 200)
+        timeline = client.get(f"/api/projects/{project_id}/timeline")
+        self.assertEqual(timeline.status_code, 200)
+        commit_hash = timeline.json()["commits"][0]["hash"]
+        return project_id, commit_hash
+
+    def test_daily_notes_upsert_and_list(self) -> None:
+        with TestClient(self.app) as client:
+            project_id, _ = self._register_and_scan(client)
+            url = f"/api/projects/{project_id}/notes"
+
+            first = client.post(
+                url,
+                json={"note_date": "2026-09-01", "summary": "上午写完扫描器"},
+            )
+            self.assertEqual(first.status_code, 200)
+            note_id = first.json()["id"]
+
+            second = client.post(
+                url,
+                json={
+                    "note_date": "2026-09-01",
+                    "summary": "晚上补上 Bug 捕获",
+                    "plan": "明天做前端",
+                },
+            )
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(second.json()["id"], note_id)
+            self.assertEqual(second.json()["summary"], "晚上补上 Bug 捕获")
+
+            single = client.get(url, params={"note_date": "2026-09-01"})
+            self.assertEqual(single.status_code, 200)
+            self.assertEqual(len(single.json()), 1)
+
+            client.post(
+                url,
+                json={"note_date": "2026-09-02", "summary": "第二天"},
+            )
+            all_notes = client.get(url)
+            self.assertEqual(all_notes.status_code, 200)
+            self.assertEqual(
+                [item["note_date"] for item in all_notes.json()],
+                ["2026-09-02", "2026-09-01"],
+            )
+
+    def test_bug_capture_patch_and_delete(self) -> None:
+        with TestClient(self.app) as client:
+            project_id, _ = self._register_and_scan(client)
+            url = f"/api/projects/{project_id}/bugs"
+
+            response = client.post(
+                url,
+                json={"error_text": "ERROR: token 字段缺失"},
+            )
+            self.assertEqual(response.status_code, 201)
+            bug = response.json()
+            bug_id = bug["id"]
+            self.assertEqual(bug["title"], "ERROR: token 字段缺失")
+            self.assertEqual(bug["title_source"], "manual")
+            self.assertEqual(bug["status"], "open")
+            self.assertTrue(bug["environment"])
+            self.assertTrue(bug["git_head"])
+            self.assertEqual(bug["git_status"], "clean")
+
+            listed = client.get(url)
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual([item["id"] for item in listed.json()], [bug_id])
+
+            filtered = client.get(url, params={"status": "open"})
+            self.assertEqual(len(filtered.json()), 1)
+
+            updated = client.patch(
+                f"/api/bugs/{bug_id}",
+                json={
+                    "root_cause": "没带 token",
+                    "solution": "请求头补 token",
+                    "status": "resolved",
+                },
+            )
+            self.assertEqual(updated.status_code, 200)
+            body = updated.json()
+            self.assertEqual(body["status"], "resolved")
+            self.assertEqual(body["root_cause"], "没带 token")
+            self.assertEqual(body["solution"], "请求头补 token")
+            # 现场快照字段不能被更新覆盖
+            self.assertEqual(body["environment"], bug["environment"])
+            self.assertEqual(body["git_head"], bug["git_head"])
+
+            invalid_status = client.patch(
+                f"/api/bugs/{bug_id}", json={"status": "mystery"}
+            )
+            self.assertEqual(invalid_status.status_code, 400)
+
+            empty = client.patch(f"/api/bugs/{bug_id}", json={})
+            self.assertEqual(empty.status_code, 400)
+
+            deleted = client.delete(f"/api/bugs/{bug_id}")
+            self.assertEqual(deleted.status_code, 200)
+            self.assertEqual(deleted.json(), {"deleted": True})
+
+            again = client.delete(f"/api/bugs/{bug_id}")
+            self.assertEqual(again.json(), {"deleted": False})
+
+    def test_commit_annotations_lifecycle_and_orphan(self) -> None:
+        with TestClient(self.app) as client:
+            project_id, commit_hash = self._register_and_scan(client)
+            list_url = f"/api/projects/{project_id}/annotations"
+            unknown_hash = "f" * 40
+
+            response = client.post(
+                f"/api/projects/{project_id}/commits/{commit_hash}/annotations",
+                json={"kind": "decision", "body": "选 PostgreSQL 便于全文检索"},
+            )
+            self.assertEqual(response.status_code, 201)
+            annotation = response.json()
+            annotation_id = annotation["id"]
+            self.assertEqual(annotation["commit_hash"], commit_hash)
+            self.assertEqual(annotation["kind"], "decision")
+
+            missing = client.post(
+                f"/api/projects/{project_id}/commits/{unknown_hash}/annotations",
+                json={"kind": "note", "body": "挂不上"},
+            )
+            self.assertEqual(missing.status_code, 404)
+
+            listed = client.get(list_url)
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(
+                [item["id"] for item in listed.json()],
+                [annotation_id],
+            )
+
+            updated = client.patch(
+                f"/api/annotations/{annotation_id}",
+                json={"body": "后来改成了 SQLite"},
+            )
+            self.assertEqual(updated.status_code, 200)
+            self.assertEqual(updated.json()["body"], "后来改成了 SQLite")
+
+            empty = client.patch(f"/api/annotations/{annotation_id}", json={})
+            self.assertEqual(empty.status_code, 400)
+
+            deleted = client.delete(f"/api/annotations/{annotation_id}")
+            self.assertEqual(deleted.status_code, 200)
+            self.assertEqual(deleted.json(), {"deleted": True})
+
+            # 再加一条，然后清空 commit 缓存，让它变成“孤儿”批注
+            client.post(
+                f"/api/projects/{project_id}/commits/{commit_hash}/annotations",
+                json={"kind": "note", "body": "这条会变成孤儿"},
+            )
+            db = DevLogDB(self.db_path)
+            try:
+                db.clear_events(project_id)
+            finally:
+                db.close()
+
+            orphaned = client.get(list_url, params={"orphan": True})
+            self.assertEqual(orphaned.status_code, 200)
+            orphan_list = orphaned.json()
+            self.assertEqual(len(orphan_list), 1)
+            self.assertEqual(orphan_list[0]["body"], "这条会变成孤儿")
 
 
 if __name__ == "__main__":
