@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from devlog.core.capture.models import DailyNote
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.review.models import (
     SECTION_DECISIONS,
@@ -25,7 +26,7 @@ from devlog.core.storage.database import DatabaseError, DevLogDB
 
 
 TZ = timezone(timedelta(hours=8))
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def at(day: int) -> datetime:
@@ -211,7 +212,7 @@ class DevLogDBTests(unittest.TestCase):
 
         upgraded = DevLogDB(v1_path)
         try:
-            self.assertEqual(upgraded.schema_version, 3)
+            self.assertEqual(upgraded.schema_version, SCHEMA_VERSION)
             same_id = upgraded.register_project("renamed", "D:/work/demo")
             self.assertEqual(same_id, 1)
             draft_id = upgraded.save_review_draft(1, make_sample_draft())
@@ -220,6 +221,14 @@ class DevLogDBTests(unittest.TestCase):
                 1, {f"{1:040d}": "新增登录页面"}
             )
             self.assertEqual(inserted, 1)
+            note_id = upgraded.upsert_daily_note(
+                1,
+                DailyNote(
+                    note_date=date(2026, 9, 1),
+                    summary="迁移后仍可写日志",
+                ),
+            )
+            self.assertGreater(note_id, 0)
         finally:
             upgraded.close()
 

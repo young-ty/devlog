@@ -14,9 +14,16 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+from devlog.core.capture.models import (
+    AnnotationKind,
+    BugRecord,
+    BugStatus,
+    CommitAnnotation,
+    DailyNote,
+)
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.review.models import (
     ClaimStatus,
@@ -25,7 +32,7 @@ from devlog.core.review.models import (
 )
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA_V1_STATEMENTS = [
     """
@@ -112,6 +119,64 @@ _SCHEMA_V3_STATEMENTS = [
     """,
 ]
 
+_SCHEMA_V4_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS dev_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        note_date TEXT NOT NULL,
+        summary TEXT NOT NULL DEFAULT '',
+        issues TEXT NOT NULL DEFAULT '',
+        plan TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, note_date),
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS bug_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        title_source TEXT NOT NULL DEFAULT 'manual'
+            CHECK (title_source IN ('manual', 'ai')),
+        error_text TEXT NOT NULL DEFAULT '',
+        environment TEXT NOT NULL DEFAULT '',
+        git_head TEXT NOT NULL DEFAULT '',
+        git_status TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'open'
+            CHECK (status IN ('open', 'root_cause_found', 'resolved')),
+        root_cause TEXT NOT NULL DEFAULT '',
+        solution TEXT NOT NULL DEFAULT '',
+        captured_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_bug_records_project_status
+        ON bug_records (project_id, status)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS commit_annotations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        commit_hash TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'note'
+            CHECK (kind IN ('note', 'decision')),
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_commit_annotations_project_hash
+        ON commit_annotations (project_id, commit_hash)
+    """,
+]
+
 _COMMIT_COLUMNS = (
     "project_id, hash, short_hash, author_name, author_email, committed_at, "
     "message_subject, files_changed, insertions, deletions, parents_count, noise_type"
@@ -176,6 +241,39 @@ class StoredReviewDraft:
     stored_claims: tuple[StoredReviewClaim, ...] = ()
 
 
+@dataclass(frozen=True)
+class StoredDailyNote:
+    """A persisted daily note carrying its database id and timestamps."""
+
+    id: int
+    project_id: int
+    note: DailyNote
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class StoredBugRecord:
+    """A persisted bug capture with its database id and timestamps."""
+
+    id: int
+    project_id: int
+    bug: BugRecord
+    captured_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class StoredCommitAnnotation:
+    """A persisted commit annotation with its database id and timestamps."""
+
+    id: int
+    project_id: int
+    annotation: CommitAnnotation
+    created_at: datetime
+    updated_at: datetime
+
+
 class DevLogDB:
     """Thin SQLite wrapper with an explicit, small API."""
 
@@ -229,6 +327,11 @@ class DevLogDB:
             # Version 2 -> 3 adds the AI commit translation cache.
             if current < 3:
                 for statement in _SCHEMA_V3_STATEMENTS:
+                    self._conn.execute(statement)
+            # Version 3 -> 4 adds the memory layer: daily notes, bug
+            # capture and commit annotations.
+            if current < 4:
+                for statement in _SCHEMA_V4_STATEMENTS:
                     self._conn.execute(statement)
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
@@ -610,6 +713,332 @@ class DevLogDB:
         )
 
     # ------------------------------------------------------------------
+    # Daily notes (memory layer)
+    # ------------------------------------------------------------------
+
+    def upsert_daily_note(self, project_id: int, note: DailyNote) -> int:
+        """Insert or update the single note for (project, note_date)."""
+
+        self.get_project(project_id)
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """
+            INSERT INTO dev_notes
+                (project_id, note_date, summary, issues, plan,
+                 created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (project_id, note_date) DO UPDATE SET
+                summary = excluded.summary,
+                issues = excluded.issues,
+                plan = excluded.plan,
+                updated_at = excluded.updated_at
+            """,
+            (
+                project_id,
+                note.note_date.isoformat(),
+                note.summary,
+                note.issues,
+                note.plan,
+                now,
+                now,
+            ),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT id FROM dev_notes WHERE project_id = ? AND note_date = ?",
+            (project_id, note.note_date.isoformat()),
+        ).fetchone()
+        return int(row[0])
+
+    def get_daily_note(
+        self,
+        project_id: int,
+        note_date: date,
+    ) -> StoredDailyNote | None:
+        """Return one day's note or None when it has not been written yet."""
+
+        row = self._conn.execute(
+            "SELECT id, project_id, note_date, summary, issues, plan, "
+            "created_at, updated_at FROM dev_notes "
+            "WHERE project_id = ? AND note_date = ?",
+            (project_id, note_date.isoformat()),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_daily_note(row)
+
+    def list_daily_notes(
+        self,
+        project_id: int,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> list[StoredDailyNote]:
+        """Return notes newest first, optionally limited to a date range."""
+
+        sql = (
+            "SELECT id, project_id, note_date, summary, issues, plan, "
+            "created_at, updated_at FROM dev_notes WHERE project_id = ?"
+        )
+        params: list[object] = [project_id]
+        if since is not None:
+            sql += " AND note_date >= ?"
+            params.append(since.isoformat())
+        if until is not None:
+            sql += " AND note_date <= ?"
+            params.append(until.isoformat())
+        sql += " ORDER BY note_date DESC"
+        rows = self._conn.execute(sql, params).fetchall()
+        return [self._row_to_daily_note(row) for row in rows]
+
+    # ------------------------------------------------------------------
+    # Bug records (memory layer)
+    # ------------------------------------------------------------------
+
+    def create_bug_record(self, project_id: int, bug: BugRecord) -> int:
+        """Persist one bug scene snapshot and return its id."""
+
+        self.get_project(project_id)
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = self._conn.execute(
+            """
+            INSERT INTO bug_records
+                (project_id, title, title_source, error_text, environment,
+                 git_head, git_status, status, root_cause, solution,
+                 captured_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                bug.title,
+                bug.title_source,
+                bug.error_text,
+                bug.environment,
+                bug.git_head,
+                bug.git_status,
+                bug.status.value,
+                bug.root_cause,
+                bug.solution,
+                now,
+                now,
+            ),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def get_bug_record(self, bug_id: int) -> StoredBugRecord:
+        """Load one bug record by id, or raise a friendly DatabaseError."""
+
+        row = self._conn.execute(
+            "SELECT id, project_id, title, title_source, error_text, "
+            "environment, git_head, git_status, status, root_cause, "
+            "solution, captured_at, updated_at "
+            "FROM bug_records WHERE id = ?",
+            (bug_id,),
+        ).fetchone()
+        if row is None:
+            raise DatabaseError(f"bug record not found: {bug_id}")
+        return self._row_to_bug_record(row)
+
+    def list_bug_records(
+        self,
+        project_id: int,
+        status: BugStatus | None = None,
+    ) -> list[StoredBugRecord]:
+        """Return bug records newest first, optionally filtered by status."""
+
+        sql = (
+            "SELECT id, project_id, title, title_source, error_text, "
+            "environment, git_head, git_status, status, root_cause, "
+            "solution, captured_at, updated_at "
+            "FROM bug_records WHERE project_id = ?"
+        )
+        params: list[object] = [project_id]
+        if status is not None:
+            sql += " AND status = ?"
+            params.append(status.value)
+        sql += " ORDER BY captured_at DESC, id DESC"
+        rows = self._conn.execute(sql, params).fetchall()
+        return [self._row_to_bug_record(row) for row in rows]
+
+    def update_bug_record(
+        self,
+        bug_id: int,
+        *,
+        title: str | None = None,
+        title_source: str | None = None,
+        root_cause: str | None = None,
+        solution: str | None = None,
+        status: BugStatus | None = None,
+    ) -> bool:
+        """Update human annotations on a bug; the scene snapshot is fixed."""
+
+        if title_source is not None and title_source not in ("manual", "ai"):
+            raise ValueError(f"unknown title_source: {title_source}")
+        if status is not None and not isinstance(status, BugStatus):
+            raise ValueError(f"unknown bug status: {status!r}")
+
+        assignments: list[str] = []
+        params: list[object] = []
+        for column, value in (
+            ("title", title),
+            ("title_source", title_source),
+            ("root_cause", root_cause),
+            ("solution", solution),
+        ):
+            if value is not None:
+                assignments.append(f"{column} = ?")
+                params.append(value)
+        if status is not None:
+            assignments.append("status = ?")
+            params.append(status.value)
+        if not assignments:
+            raise ValueError("update_bug_record requires at least one field")
+
+        assignments.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(bug_id)
+        cursor = self._conn.execute(
+            "UPDATE bug_records SET " + ", ".join(assignments) + " WHERE id = ?",
+            params,
+        )
+        self._conn.commit()
+        return cursor.rowcount == 1
+
+    def delete_bug_record(self, bug_id: int) -> bool:
+        """Remove one bug record; returns True when it existed."""
+
+        cursor = self._conn.execute(
+            "DELETE FROM bug_records WHERE id = ?", (bug_id,)
+        )
+        self._conn.commit()
+        return cursor.rowcount == 1
+
+    # ------------------------------------------------------------------
+    # Commit annotations (memory layer)
+    # ------------------------------------------------------------------
+
+    def add_commit_annotation(
+        self,
+        project_id: int,
+        annotation: CommitAnnotation,
+    ) -> int:
+        """Attach a note to a commit already cached for this project."""
+
+        known = self._conn.execute(
+            "SELECT id FROM commits WHERE project_id = ? AND hash = ?",
+            (project_id, annotation.commit_hash),
+        ).fetchone()
+        if known is None:
+            raise DatabaseError(
+                f"commit hash not cached for project {project_id}: "
+                f"{annotation.commit_hash}"
+            )
+
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = self._conn.execute(
+            "INSERT INTO commit_annotations "
+            "(project_id, commit_hash, kind, body, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                project_id,
+                annotation.commit_hash,
+                annotation.kind.value,
+                annotation.body,
+                now,
+                now,
+            ),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def list_commit_annotations(
+        self,
+        project_id: int,
+        commit_hash: str | None = None,
+    ) -> list[StoredCommitAnnotation]:
+        """Return annotations for a project, newest first."""
+
+        sql = (
+            "SELECT id, project_id, commit_hash, kind, body, "
+            "created_at, updated_at FROM commit_annotations "
+            "WHERE project_id = ?"
+        )
+        params: list[object] = [project_id]
+        if commit_hash is not None:
+            sql += " AND commit_hash = ?"
+            params.append(commit_hash)
+        sql += " ORDER BY created_at DESC, id DESC"
+        rows = self._conn.execute(sql, params).fetchall()
+        return [self._row_to_annotation(row) for row in rows]
+
+    def list_orphan_commit_annotations(
+        self,
+        project_id: int,
+    ) -> list[StoredCommitAnnotation]:
+        """Return annotations whose commit no longer exists for the project.
+
+        History rewrites (rebase / force push) can remove the original
+        hash; those notes are kept and reported instead of silently lost.
+        """
+
+        rows = self._conn.execute(
+            """
+            SELECT a.id, a.project_id, a.commit_hash, a.kind, a.body,
+                   a.created_at, a.updated_at
+            FROM commit_annotations a
+            LEFT JOIN commits c
+                ON c.project_id = a.project_id AND c.hash = a.commit_hash
+            WHERE a.project_id = ? AND c.id IS NULL
+            ORDER BY a.created_at DESC, a.id DESC
+            """,
+            (project_id,),
+        ).fetchall()
+        return [self._row_to_annotation(row) for row in rows]
+
+    def update_commit_annotation(
+        self,
+        annotation_id: int,
+        *,
+        kind: AnnotationKind | None = None,
+        body: str | None = None,
+    ) -> bool:
+        """Edit the kind or body of one annotation."""
+
+        assignments: list[str] = []
+        params: list[object] = []
+        if kind is not None:
+            if not isinstance(kind, AnnotationKind):
+                raise ValueError(f"unknown annotation kind: {kind!r}")
+            assignments.append("kind = ?")
+            params.append(kind.value)
+        if body is not None:
+            assignments.append("body = ?")
+            params.append(body)
+        if not assignments:
+            raise ValueError("update_commit_annotation requires a field")
+
+        assignments.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(annotation_id)
+        cursor = self._conn.execute(
+            "UPDATE commit_annotations SET "
+            + ", ".join(assignments)
+            + " WHERE id = ?",
+            params,
+        )
+        self._conn.commit()
+        return cursor.rowcount == 1
+
+    def delete_commit_annotation(self, annotation_id: int) -> bool:
+        """Remove one annotation; returns True when it existed."""
+
+        cursor = self._conn.execute(
+            "DELETE FROM commit_annotations WHERE id = ?", (annotation_id,)
+        )
+        self._conn.commit()
+        return cursor.rowcount == 1
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -630,4 +1059,60 @@ class DevLogDB:
             deletions=int(row[9]),
             parents_count=int(row[10]),
             noise_type=NoiseType(row[11]),
+        )
+
+    @staticmethod
+    def _row_to_daily_note(row: sqlite3.Row | tuple) -> StoredDailyNote:
+        # Columns: id, project_id, note_date, summary, issues, plan,
+        # created_at, updated_at
+        return StoredDailyNote(
+            id=int(row[0]),
+            project_id=int(row[1]),
+            note=DailyNote(
+                note_date=date.fromisoformat(row[2]),
+                summary=row[3],
+                issues=row[4],
+                plan=row[5],
+            ),
+            created_at=datetime.fromisoformat(row[6]),
+            updated_at=datetime.fromisoformat(row[7]),
+        )
+
+    @staticmethod
+    def _row_to_bug_record(row: sqlite3.Row | tuple) -> StoredBugRecord:
+        # Columns: id, project_id, title, title_source, error_text,
+        # environment, git_head, git_status, status, root_cause, solution,
+        # captured_at, updated_at
+        return StoredBugRecord(
+            id=int(row[0]),
+            project_id=int(row[1]),
+            bug=BugRecord(
+                title=row[2],
+                title_source=row[3],
+                error_text=row[4],
+                environment=row[5],
+                git_head=row[6],
+                git_status=row[7],
+                status=BugStatus(row[8]),
+                root_cause=row[9],
+                solution=row[10],
+            ),
+            captured_at=datetime.fromisoformat(row[11]),
+            updated_at=datetime.fromisoformat(row[12]),
+        )
+
+    @staticmethod
+    def _row_to_annotation(row: sqlite3.Row | tuple) -> StoredCommitAnnotation:
+        # Columns: id, project_id, commit_hash, kind, body, created_at,
+        # updated_at
+        return StoredCommitAnnotation(
+            id=int(row[0]),
+            project_id=int(row[1]),
+            annotation=CommitAnnotation(
+                commit_hash=row[2],
+                kind=AnnotationKind(row[3]),
+                body=row[4],
+            ),
+            created_at=datetime.fromisoformat(row[5]),
+            updated_at=datetime.fromisoformat(row[6]),
         )
