@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
 import {
+  addAnnotation,
+  deleteAnnotation,
   getLLMConfig,
   getProjectTimeline,
+  listAnnotations,
   translateProjectCommits,
 } from "../api";
 import type {
+  AnnotationKind,
+  CommitAnnotation,
   ProjectTimeline,
   TimelineCommit,
   TimelineTheme,
@@ -63,6 +68,15 @@ export function TimelinePage({
   const [llmReady, setLLMReady] = useState<boolean | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  const [annotations, setAnnotations] = useState<
+    Record<string, CommitAnnotation[]>
+  >({});
+  const [orphans, setOrphans] = useState<CommitAnnotation[]>([]);
+  const [openHash, setOpenHash] = useState<string | null>(null);
+  const [draftKind, setDraftKind] = useState<AnnotationKind>("note");
+  const [draftBody, setDraftBody] = useState("");
+  const [annotationBusy, setAnnotationBusy] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     getLLMConfig()
@@ -106,6 +120,37 @@ export function TimelinePage({
     };
   }, [projectId, reloadKey]);
 
+  // 一次拉取全部批注，再按 commit hash 分组，避免逐条提交去请求
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      listAnnotations(projectId),
+      listAnnotations(projectId, { orphan: true }),
+    ])
+      .then(([all, orphanList]) => {
+        if (cancelled) {
+          return;
+        }
+        const grouped: Record<string, CommitAnnotation[]> = {};
+        all.forEach((item) => {
+          grouped[item.commit_hash] = [
+            ...(grouped[item.commit_hash] ?? []),
+            item,
+          ];
+        });
+        setAnnotations(grouped);
+        setOrphans(orphanList);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   async function handleTranslate() {
     setTranslating(true);
     setError("");
@@ -128,6 +173,86 @@ export function TimelinePage({
       setError((err as Error).message);
     } finally {
       setTranslating(false);
+    }
+  }
+
+  function toggleCommitAnnotations(hash: string) {
+    if (openHash === hash) {
+      setOpenHash(null);
+      return;
+    }
+    setOpenHash(hash);
+    setDraftKind("note");
+    setDraftBody("");
+  }
+
+  async function handleAddAnnotation(commitHash: string) {
+    const body = draftBody.trim();
+    if (!body) {
+      setError("请先填写批注内容");
+      return;
+    }
+    setAnnotationBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const created = await addAnnotation(projectId, commitHash, {
+        kind: draftKind,
+        body,
+      });
+      setAnnotations((prev) => ({
+        ...prev,
+        [commitHash]: [...(prev[commitHash] ?? []), created],
+      }));
+      setDraftBody("");
+      setSuccess("批注已添加");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAnnotationBusy(false);
+    }
+  }
+
+  async function handleDeleteAnnotation(annotation: CommitAnnotation) {
+    setAnnotationBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await deleteAnnotation(annotation.id);
+      if (!result.deleted) {
+        setError("这条批注不存在，可能已被删除");
+        return;
+      }
+      setAnnotations((prev) => ({
+        ...prev,
+        [annotation.commit_hash]: (prev[annotation.commit_hash] ?? []).filter(
+          (item) => item.id !== annotation.id,
+        ),
+      }));
+      setSuccess("批注已删除");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAnnotationBusy(false);
+    }
+  }
+
+  async function handleDeleteOrphan(annotation: CommitAnnotation) {
+    setAnnotationBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await deleteAnnotation(annotation.id);
+      if (!result.deleted) {
+        setError("这条批注不存在，可能已被删除");
+        return;
+      }
+      setOrphans((prev) => prev.filter((item) => item.id !== annotation.id));
+      setSuccess("孤儿批注已删除");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAnnotationBusy(false);
     }
   }
 
@@ -164,6 +289,10 @@ export function TimelinePage({
   const visibleCommits = timeline.commits.filter(
     (item) => showNoise || item.noise_type === "none",
   );
+  const annotationCount = Object.values(annotations).reduce(
+    (sum, items) => sum + items.length,
+    0,
+  );
 
   function commitsForTheme(theme: TimelineTheme): TimelineCommit[] {
     const hashes = new Set(theme.commit_hashes);
@@ -174,6 +303,8 @@ export function TimelinePage({
 
   function renderCommitRow(commit: TimelineCommit, isNoise: boolean) {
     const translated = commit.translated_subject?.trim();
+    const commitAnnotations = annotations[commit.hash] ?? [];
+    const isOpen = openHash === commit.hash;
     return (
       <div
         key={commit.hash}
@@ -205,6 +336,73 @@ export function TimelinePage({
         ) : (
           <div className="commit-subject">{commit.message_subject}</div>
         )}
+        <div className="commit-annotations">
+          <button
+            className="annotation-toggle"
+            onClick={() => toggleCommitAnnotations(commit.hash)}
+          >
+            {isOpen
+              ? "收起批注"
+              : commitAnnotations.length > 0
+                ? `批注 ${commitAnnotations.length}`
+                : "添加批注"}
+          </button>
+          {isOpen && (
+            <div className="annotation-panel">
+              {commitAnnotations.length > 0 ? (
+                <ul className="annotation-list">
+                  {commitAnnotations.map((item) => (
+                    <li key={item.id} className="annotation-item">
+                      <span
+                        className={
+                          item.kind === "decision"
+                            ? "badge badge-confirmed"
+                            : "badge badge-edited"
+                        }
+                      >
+                        {item.kind === "decision" ? "决策" : "备注"}
+                      </span>
+                      <span className="annotation-body">{item.body}</span>
+                      <button
+                        className="secondary danger tiny"
+                        disabled={annotationBusy}
+                        onClick={() => handleDeleteAnnotation(item)}
+                      >
+                        删除
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="panel-hint">
+                  还没有批注，记下当时的想法、踩的坑或做出的决定。
+                </p>
+              )}
+              <div className="annotation-form">
+                <select
+                  value={draftKind}
+                  onChange={(event) =>
+                    setDraftKind(event.target.value as AnnotationKind)
+                  }
+                >
+                  <option value="note">备注</option>
+                  <option value="decision">决策</option>
+                </select>
+                <input
+                  placeholder="例如：这里的重试逻辑踩过坑 / 选 SQLite 因为零配置"
+                  value={draftBody}
+                  onChange={(event) => setDraftBody(event.target.value)}
+                />
+                <button
+                  disabled={annotationBusy}
+                  onClick={() => handleAddAnnotation(commit.hash)}
+                >
+                  添加批注
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -243,6 +441,10 @@ export function TimelinePage({
           <div className="stat-value warning">
             {timeline.silence_periods.length}
           </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">批注</div>
+          <div className="stat-value">{annotationCount}</div>
         </div>
       </div>
 
@@ -333,6 +535,48 @@ export function TimelinePage({
               </article>
             ))}
           </section>
+
+          {orphans.length > 0 && (
+            <section className="section">
+              <div className="panel-head">
+                <h2>孤儿批注</h2>
+                <span className="panel-hint">
+                  {orphans.length} 条 · 原 commit 已不在 Git 历史中
+                </span>
+              </div>
+              <p className="panel-hint orphan-hint">
+                通常是 rebase 或 force push 改写了历史。批注不会自动丢失，
+                确认无用后可删除。
+              </p>
+              {orphans.map((item) => (
+                <div key={item.id} className="orphan-card">
+                  <div className="orphan-main">
+                    <span
+                      className={
+                        item.kind === "decision"
+                          ? "badge badge-confirmed"
+                          : "badge badge-edited"
+                      }
+                    >
+                      {item.kind === "decision" ? "决策" : "备注"}
+                    </span>
+                    <span className="annotation-body">{item.body}</span>
+                  </div>
+                  <div className="orphan-meta mono">
+                    {item.commit_hash.slice(0, 7)} ·{" "}
+                    {formatDateTime(item.created_at)}
+                  </div>
+                  <button
+                    className="secondary danger tiny"
+                    disabled={annotationBusy}
+                    onClick={() => handleDeleteOrphan(item)}
+                  >
+                    删除
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
 
           {timeline.silence_periods.length > 0 && (
             <section className="section">

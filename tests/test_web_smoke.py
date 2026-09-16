@@ -78,6 +78,20 @@ class WebSmokeTests(unittest.TestCase):
                 f"missing memory type: {type_name}",
             )
 
+        timeline_text = (
+            WEB_DIR / "src" / "pages" / "TimelinePage.tsx"
+        ).read_text(encoding="utf-8")
+        for function_name in (
+            "listAnnotations",
+            "addAnnotation",
+            "deleteAnnotation",
+        ):
+            self.assertIn(
+                function_name,
+                timeline_text,
+                f"timeline page missing annotation call: {function_name}",
+            )
+
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")
