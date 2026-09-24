@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -95,6 +96,26 @@ class DevLogDBTests(unittest.TestCase):
 
     def test_schema_version_is_created(self) -> None:
         self.assertEqual(self.db.schema_version, SCHEMA_VERSION)
+
+    def test_connection_can_be_used_from_another_thread(self) -> None:
+        """FastAPI 依赖与路由可能跑在不同线程，连接必须支持跨线程使用。"""
+
+        self.db.register_project("demo", "D:/work/demo")
+        results: list[int] = []
+        errors: list[BaseException] = []
+
+        def worker() -> None:
+            try:
+                results.append(len(self.db.list_projects()))
+            except BaseException as exc:  # pragma: no cover - 失败时记录原因
+                errors.append(exc)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(errors, [])
+        self.assertEqual(results, [1])
 
     def test_register_project_and_duplicate_register(self) -> None:
         project_id = self.db.register_project("demo", "D:/work/demo")

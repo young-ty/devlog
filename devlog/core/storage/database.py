@@ -281,7 +281,13 @@ class DevLogDB:
         if str(path) != ":memory:":
             path.parent.mkdir(parents=True, exist_ok=True)
 
-        self._conn = sqlite3.connect(str(path), timeout=5.0)
+        # FastAPI 的依赖生成器与同步路由可能运行在不同的工作线程，
+        # 因此这里允许连接跨线程使用（每个请求仍是独立的连接、串行访问）。
+        self._conn = sqlite3.connect(
+            str(path),
+            timeout=5.0,
+            check_same_thread=False,
+        )
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._ensure_schema()
         self._closed = False
