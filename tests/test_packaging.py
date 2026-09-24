@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from devlog import __version__
-from devlog.cli.main import build_parser, main
+from devlog.cli.main import browser_url, build_parser, main
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -67,6 +67,11 @@ class ServeCommandTests(unittest.TestCase):
         self.assertEqual(args.command, "serve")
         self.assertEqual(args.host, "127.0.0.1")
         self.assertEqual(args.port, 8000)
+        self.assertFalse(args.open_browser)
+
+    def test_serve_open_flag_is_opt_in(self) -> None:
+        args = build_parser().parse_args(["serve", "--open"])
+        self.assertTrue(args.open_browser)
 
     def test_serve_calls_uvicorn_with_app_and_options(self) -> None:
         captured: dict[str, object] = {}
@@ -85,6 +90,33 @@ class ServeCommandTests(unittest.TestCase):
         self.assertEqual(captured["app"], "fake-app")
         self.assertEqual(captured["host"], "0.0.0.0")
         self.assertEqual(captured["port"], 9000)
+
+    def test_serve_with_open_flag_schedules_browser_open(self) -> None:
+        with mock.patch("devlog.cli.main.create_app", return_value="fake-app"):
+            with mock.patch("devlog.cli.main.uvicorn.run"):
+                with mock.patch(
+                    "devlog.cli.main.schedule_browser_open"
+                ) as browser:
+                    code = main(["serve", "--port", "9123", "--open"])
+
+        self.assertEqual(code, 0)
+        browser.assert_called_once_with("http://127.0.0.1:9123")
+
+    def test_serve_without_open_flag_does_not_touch_browser(self) -> None:
+        with mock.patch("devlog.cli.main.create_app", return_value="fake-app"):
+            with mock.patch("devlog.cli.main.uvicorn.run"):
+                with mock.patch(
+                    "devlog.cli.main.schedule_browser_open"
+                ) as browser:
+                    code = main(["serve"])
+
+        self.assertEqual(code, 0)
+        browser.assert_not_called()
+
+    def test_browser_url_maps_wildcard_host_to_loopback(self) -> None:
+        self.assertEqual(browser_url("0.0.0.0", 8000), "http://127.0.0.1:8000")
+        self.assertEqual(browser_url("::", 8000), "http://127.0.0.1:8000")
+        self.assertEqual(browser_url("127.0.0.1", 9123), "http://127.0.0.1:9123")
 
     def test_fresh_server_app_import_has_no_circular_import(self) -> None:
         result = subprocess.run(
@@ -120,6 +152,41 @@ class ReadmeTests(unittest.TestCase):
         for fragment in fragments:
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, text)
+
+
+class LauncherScriptTests(unittest.TestCase):
+    """一键启动脚本必须存在、可被双击，并复用统一的 serve 入口。"""
+
+    def setUp(self) -> None:
+        self.script = ROOT / "start-devlog.bat"
+
+    def test_launcher_exists(self) -> None:
+        self.assertTrue(self.script.is_file())
+
+    def test_launcher_reuses_devlog_serve(self) -> None:
+        text = self.script.read_text(encoding="utf-8")
+        self.assertIn("devlog.exe\" serve --open", text)
+        self.assertIn(".venv\\Scripts\\devlog.exe", text)
+
+    def test_launcher_builds_frontend_when_dist_missing(self) -> None:
+        text = self.script.read_text(encoding="utf-8")
+        self.assertIn("devlog\\web\\dist\\index.html", text)
+        self.assertIn("pnpm build", text)
+
+    def test_launcher_uses_crlf_and_has_no_bom(self) -> None:
+        """cmd.exe 对 LF 换行和 UTF-8 BOM 都很敏感，这里钉住文件格式。"""
+
+        raw = self.script.read_bytes()
+        self.assertFalse(raw.startswith(b"\xef\xbb\xbf"))
+        self.assertIn(b"\r\n", raw)
+        self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"))
+
+
+class ServeOneLinerDocsTests(unittest.TestCase):
+    def test_readme_documents_launcher_script(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("start-devlog.bat", text)
+        self.assertIn("127.0.0.1:8000", text)
 
 
 if __name__ == "__main__":

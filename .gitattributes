@@ -1,0 +1,3 @@
+# 批处理脚本必须固定为 CRLF：cmd.exe 对 LF 换行和 UTF-8 BOM 的解析都不稳定。
+# 这条规则保证无论在什么系统上检出，start-devlog.bat 都是可双击的。
+*.bat text eol=crlf

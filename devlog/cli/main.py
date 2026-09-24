@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -132,8 +134,34 @@ def build_parser() -> argparse.ArgumentParser:
         default=8000,
         help="监听端口（默认 8000）",
     )
+    serve_parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="启动后自动在默认浏览器打开界面（一键启动脚本会用这个）",
+    )
 
     return parser
+
+
+def browser_url(host: str, port: int) -> str:
+    """把监听地址翻译成浏览器能打开的地址。
+
+    `0.0.0.0` 表示「监听所有网卡」，它本身不是一个可访问的地址，
+    所以展示给浏览器时统一换成回环地址 127.0.0.1。
+    """
+
+    display_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    return f"http://{display_host}:{port}"
+
+
+def schedule_browser_open(url: str, delay: float = 1.5) -> threading.Timer:
+    """延迟一小段时间再打开浏览器，避免服务还没起来就打开一个空白页。"""
+
+    timer = threading.Timer(delay, webbrowser.open, args=[url])
+    timer.daemon = True
+    timer.start()
+    return timer
 
 
 def _fmt_day(when: datetime) -> str:
@@ -160,12 +188,19 @@ def main(argv: list[str] | None = None) -> int:
         db_path = Path(args.db).expanduser() if args.db else None
 
         if args.command == "serve":
-            uvicorn.run(
-                create_app(db_path=db_path),
-                host=args.host,
-                port=args.port,
-                log_level="info",
-            )
+            app = create_app(db_path=db_path)
+            url = browser_url(args.host, args.port)
+            web_dist = getattr(getattr(app, "state", None), "web_dist", None)
+            if web_dist:
+                print(f"DevLog 界面地址：{url}")
+            else:
+                print(
+                    "未找到前端构建产物（devlog/web/dist），当前只提供 API。"
+                    "先执行 start-devlog.bat 或 `pnpm build` 生成界面。"
+                )
+            if args.open_browser:
+                schedule_browser_open(url)
+            uvicorn.run(app, host=args.host, port=args.port, log_level="info")
             return 0
 
         with DevLogDB(db_path) as db:

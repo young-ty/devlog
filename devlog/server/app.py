@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from devlog.cli import runner
 from devlog.core.capture.models import AnnotationKind, BugStatus, DailyNote
@@ -21,6 +22,25 @@ from devlog.core.llm.base import LLMError
 from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError, default_db_path
 from devlog.server import schemas
+
+
+# 前端构建产物默认位置：devlog/web/dist（由 `pnpm build` 生成）。
+DEFAULT_WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+
+
+def resolve_web_dist(web_dir: str | Path | None = None) -> Path | None:
+    """返回可用的前端构建目录；没有构建产物时返回 None（退化成纯 API 模式）。
+
+    只认「目录里真的有 index.html」这一条判据，避免把空目录当成
+    可用的前端产物，让用户看到一个打不开的页面。
+    """
+
+    candidate = (
+        Path(web_dir).expanduser() if web_dir is not None else DEFAULT_WEB_DIST
+    )
+    if (candidate / "index.html").is_file():
+        return candidate
+    return None
 
 
 def _parse_bug_status(value: str) -> BugStatus:
@@ -47,20 +67,30 @@ def _parse_annotation_kind(value: str) -> AnnotationKind:
         )
 
 
-def create_app(db_path: str | Path | None = None) -> FastAPI:
-    """构建配置好的 DevLog API 应用（供 uvicorn 与测试使用）。"""
+def create_app(
+    db_path: str | Path | None = None,
+    web_dir: str | Path | None = None,
+) -> FastAPI:
+    """构建配置好的 DevLog API 应用（供 uvicorn 与测试使用）。
+
+    如果 `devlog/web/dist` 里有前端构建产物，就把静态文件挂到根路径，
+    这样一个端口同时提供页面和 API；没有产物时只提供 API，
+    开发期继续用 `pnpm dev` 的 5173 端口。
+    """
 
     resolved_db = (
         str(Path(db_path).expanduser().resolve())
         if db_path is not None
         else str(default_db_path())
     )
+    web_dist = resolve_web_dist(web_dir)
     app = FastAPI(
         title="DevLog API",
         description="本地开发复盘工具的 HTTP 接口",
         version="0.1.0",
     )
     app.state.db_path = resolved_db
+    app.state.web_dist = str(web_dist) if web_dist is not None else None
 
     app.add_middleware(
         CORSMiddleware,
@@ -471,6 +501,14 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         return JSONResponse(
             status_code=404 if not_found else 500,
             content={"detail": message},
+        )
+
+    # 静态资源必须最后挂载：路由按注册顺序匹配，放前面会把 /api/** 一起吞掉。
+    if web_dist is not None:
+        app.mount(
+            "/",
+            StaticFiles(directory=web_dist, html=True),
+            name="web",
         )
 
     return app
