@@ -16,8 +16,10 @@ from devlog.core.llm.base import LLMClientBase, LLMError
 from devlog.core.llm.chunking import chunk_texts, summarize_texts_in_chunks
 from devlog.core.llm.deepseek import DEFAULT_MODEL, DeepSeekClient, load_local_config
 from devlog.core.llm.themes import (
+    AssetSummary,
     ThemeSummary,
     complete_json_with_retry,
+    summarize_assets,
     summarize_theme,
 )
 from devlog.core.llm.translation import translate_commit_subjects
@@ -164,6 +166,87 @@ class ThemeSummaryTests(unittest.TestCase):
     def test_missing_field_rejected(self) -> None:
         with self.assertRaises(LLMError):
             ThemeSummary.from_dict({"title": "x"})
+
+
+class FakeAssetClient(LLMClientBase):
+    """只回答"可复用资产"那一次调用。"""
+
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+        self.json_prompts: list[str] = []
+
+    def complete(self, prompt: str) -> str:
+        return "unused"
+
+    def complete_json(self, prompt: str) -> dict:
+        self.json_prompts.append(prompt)
+        return self.payload
+
+
+class AssetSummaryTests(unittest.TestCase):
+    def _theme(self) -> Theme:
+        return Theme(
+            id="theme-1",
+            title="login",
+            kind="feature",
+            commit_hashes=(f"{1:040d}", f"{2:040d}"),
+            started_at=at(1),
+            ended_at=at(2),
+            commit_count=2,
+        )
+
+    def _summary(self) -> ThemeSummary:
+        return ThemeSummary(
+            title="登录功能",
+            kind="feature",
+            summary="实现了登录页与接口。",
+            sources=(f"{1:040d}",),
+        )
+
+    def test_assets_are_parsed_and_bounded(self) -> None:
+        payload = {
+            "assets": [
+                {
+                    "name": f"资产{i}",
+                    "rationale": "可以复用。",
+                    "sources": [f"{1:040d}"],
+                }
+                for i in range(8)
+            ]
+        }
+        client = FakeAssetClient(payload)
+        assets = summarize_assets([self._theme()], [self._summary()], client)
+
+        self.assertEqual(len(assets), 5)
+        self.assertEqual(assets[0].name, "资产0")
+        self.assertEqual(assets[0].sources, (f"{1:040d}",))
+        self.assertIn("reusable assets", client.json_prompts[0])
+
+    def test_empty_asset_list_is_allowed(self) -> None:
+        client = FakeAssetClient({"assets": []})
+        self.assertEqual(
+            summarize_assets([self._theme()], [self._summary()], client),
+            [],
+        )
+
+    def test_no_themes_skips_the_call(self) -> None:
+        client = FakeAssetClient({"assets": []})
+        self.assertEqual(summarize_assets([], [], client), [])
+        self.assertEqual(client.json_prompts, [])
+
+    def test_missing_key_is_rejected(self) -> None:
+        client = FakeAssetClient({"foo": []})
+        with self.assertRaises(LLMError):
+            summarize_assets([self._theme()], [self._summary()], client)
+
+    def test_mismatched_summaries_raise(self) -> None:
+        client = FakeAssetClient({"assets": []})
+        with self.assertRaises(ValueError):
+            summarize_assets([self._theme()], [], client)
+
+    def test_asset_without_name_is_rejected(self) -> None:
+        with self.assertRaises(LLMError):
+            AssetSummary.from_dict({"rationale": "缺名字", "sources": []})
 
 
 class ConfigTests(unittest.TestCase):

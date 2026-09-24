@@ -269,7 +269,14 @@ def create_app(
             range_end=draft.range_end,
             generated_at=draft.generated_at,
             exported_path=record.exported_path,
-            questions=draft.questions,
+            questions=[
+                schemas.ReviewQuestionResponse(
+                    text=question.text,
+                    section=question.section,
+                    answer=question.answer,
+                )
+                for question in draft.questions
+            ],
             claims=[
                 schemas.ReviewClaimResponse(
                     id=item.id,

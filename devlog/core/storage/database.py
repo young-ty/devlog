@@ -28,6 +28,7 @@ from devlog.core.review.models import (
     ClaimStatus,
     ReviewClaim,
     ReviewDraft,
+    ReviewQuestion,
 )
 
 
@@ -184,6 +185,28 @@ _COMMIT_COLUMNS = (
 
 class DatabaseError(RuntimeError):
     """当状态数据库无法使用时抛出。"""
+
+
+def _load_questions(raw: str | None) -> list[ReviewQuestion]:
+    """读取草稿里的引导问题，兼容历史格式。
+
+    schema v5 之前问题只存成字符串数组；从 v5 起存成
+    {"section", "text"} 对象。老草稿必须还能打开，所以两种都要认。
+    """
+
+    items = json.loads(raw or "[]")
+    questions: list[ReviewQuestion] = []
+    for item in items:
+        if isinstance(item, str):
+            questions.append(ReviewQuestion(text=item))
+        elif isinstance(item, dict):
+            questions.append(
+                ReviewQuestion(
+                    text=str(item.get("text", "")),
+                    section=str(item.get("section", "")),
+                )
+            )
+    return questions
 
 
 def default_db_path() -> Path:
@@ -557,7 +580,13 @@ class DevLogDB:
                 draft.range_start.isoformat(),
                 draft.range_end.isoformat(),
                 draft.generated_at.isoformat(),
-                json.dumps(draft.questions, ensure_ascii=False),
+                json.dumps(
+                    [
+                        {"section": question.section, "text": question.text}
+                        for question in draft.questions
+                    ],
+                    ensure_ascii=False,
+                ),
             ),
         )
         draft_id = int(cursor.lastrowid)
@@ -638,7 +667,7 @@ class DevLogDB:
             range_start=datetime.fromisoformat(row[4]),
             range_end=datetime.fromisoformat(row[5]),
             claims=[item.claim for item in claims],
-            questions=json.loads(row[7] or "[]"),
+            questions=_load_questions(row[7]),
             generated_at=created_at,
         )
         return StoredReviewDraft(

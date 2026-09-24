@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from devlog.core.review.models import (
+    SECTION_ASSETS,
+    SECTION_ISSUES,
     SECTION_ORDER,
     ClaimStatus,
     ReviewClaim,
@@ -17,6 +19,17 @@ STATUS_LABELS = {
     ClaimStatus.AI_PENDING: "🤖 AI 推断 · 待确认",
     ClaimStatus.CONFIRMED: "✔ 已确认",
     ClaimStatus.EDITED: "✏️ 已修改",
+}
+
+# 没有引导问题、也不会自动填充的板块，说明它的内容该从哪里来。
+SECTION_HINTS = {
+    SECTION_ISSUES: (
+        "> 本板块由 Bug 捕获记录自动汇总。还没有内容时，"
+        "用 Bug 捕获功能把报错、环境和 Git 状态存下来。"
+    ),
+    SECTION_ASSETS: (
+        "> 本板块由 AI 横跨所有开发主题归纳，逐条确认之后才算数。"
+    ),
 }
 
 
@@ -41,6 +54,15 @@ def _claim_line(claim: ReviewClaim) -> str:
     return f"- {claim.text}{sources} · {label}{note}"
 
 
+def _section_placeholder(section: str, draft: ReviewDraft) -> str:
+    """空板块的提示语：能指到具体问题就指过去，别只说"请回答文末问题"。"""
+
+    for index, question in enumerate(draft.questions, start=1):
+        if question.section == section:
+            return f"> 本板块需要你补充：请回答文末第 {index} 个引导问题。"
+    return SECTION_HINTS.get(section, "> 本板块暂无可自动填充的内容。")
+
+
 def export_markdown(draft: ReviewDraft) -> str:
     """把草稿渲染成一份独立的 Markdown 文档。"""
 
@@ -62,14 +84,14 @@ def export_markdown(draft: ReviewDraft) -> str:
             for claim in section_claims:
                 lines.append(_claim_line(claim))
         else:
-            lines.append("> 本板块不自动填充内容，请回答文末的引导问题。")
+            lines.append(_section_placeholder(section, draft))
         lines.append("")
 
     if draft.questions:
         lines.append("## 待回答的问题（人机共创）")
         lines.append("")
         for index, question in enumerate(draft.questions, start=1):
-            lines.append(f"{index}. {question}")
+            lines.append(f"{index}. {question.text}")
         lines.append("")
 
     lines.append("---")

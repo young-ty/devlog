@@ -17,6 +17,7 @@ from unittest import mock
 from devlog.cli import runner
 from devlog.cli.main import main as cli_main
 from devlog.core.review.models import (
+    SECTION_ASSETS,
     SECTION_OVERVIEW,
     SECTION_TIMELINE,
     ClaimStatus,
@@ -178,11 +179,19 @@ class CLIFlowTests(unittest.TestCase):
             fake_summary.summary = "围绕登录页完成实现，并修复按钮问题。"
             fake_summary.sources = ()
 
+            fake_asset = mock.MagicMock()
+            fake_asset.name = "登录态校验函数"
+            fake_asset.rationale = "登录与权限校验在不同页面反复出现。"
+            fake_asset.sources = ()
+
             with mock.patch(
                 "devlog.cli.runner.DeepSeekClient", return_value=fake_client
             ), mock.patch(
                 "devlog.cli.runner.summarize_theme",
                 return_value=fake_summary,
+            ), mock.patch(
+                "devlog.cli.runner.summarize_assets",
+                return_value=[fake_asset],
             ):
                 result = runner.cmd_review_generate(
                     db, self.repo, offline=False
@@ -204,6 +213,15 @@ class CLIFlowTests(unittest.TestCase):
                     for claim in timeline_claims
                 )
             )
+
+            asset_claims = [
+                item.claim
+                for item in record.stored_claims
+                if item.claim.section == SECTION_ASSETS
+            ]
+            self.assertEqual(len(asset_claims), 1)
+            self.assertIn("登录态校验函数", asset_claims[0].text)
+            self.assertEqual(asset_claims[0].status, ClaimStatus.AI_PENDING)
 
     def test_init_rejects_non_git_directory(self) -> None:
         plain = self.root / "plain"

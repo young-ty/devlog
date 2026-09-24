@@ -98,6 +98,14 @@ class ReviewClaimResponse(BaseModel):
     user_note: str = ""
 
 
+class ReviewQuestionResponse(BaseModel):
+    """一条引导问题：问的是什么、对应哪个板块、用户补充了什么。"""
+
+    text: str
+    section: str = ""
+    answer: str = ""
+
+
 class ReviewDraftResponse(BaseModel):
     draft_id: int
     project_id: int
@@ -107,7 +115,7 @@ class ReviewDraftResponse(BaseModel):
     range_end: datetime
     generated_at: datetime
     exported_path: str | None = None
-    questions: list[str] = Field(default_factory=list)
+    questions: list[ReviewQuestionResponse] = Field(default_factory=list)
     claims: list[ReviewClaimResponse] = Field(default_factory=list)
 
 

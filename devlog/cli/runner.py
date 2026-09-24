@@ -26,6 +26,7 @@ from devlog.core.llm.deepseek import DeepSeekClient
 from devlog.core.llm.themes import (
     complete_json_with_retry,
     rule_based_summary,
+    summarize_assets,
     summarize_theme,
 )
 from devlog.core.llm.translation import translate_commit_subjects
@@ -219,6 +220,7 @@ def cmd_review_generate(
     cluster = cluster_themes(events)
     range_start = events[0].committed_at
     range_end = events[-1].committed_at
+    bug_records = [record.bug for record in db.list_bug_records(project_id)]
 
     if offline:
         summaries = [rule_based_summary(theme) for theme in cluster.themes]
@@ -231,6 +233,7 @@ def cmd_review_generate(
             theme_summaries=summaries,
             silence_periods=cluster.silence_periods,
             factual_summaries=True,
+            bug_records=bug_records,
         )
     else:
         client = DeepSeekClient()
@@ -241,6 +244,7 @@ def cmd_review_generate(
                 event for event in events if event.hash in theme_hash_set
             ]
             summaries.append(summarize_theme(theme, theme_events, client))
+        assets = summarize_assets(cluster.themes, summaries, client)
         draft = build_review_draft(
             project_name=project_name,
             range_start=range_start,
@@ -250,6 +254,8 @@ def cmd_review_generate(
             theme_summaries=summaries,
             silence_periods=cluster.silence_periods,
             factual_summaries=False,
+            bug_records=bug_records,
+            asset_summaries=assets,
         )
 
     draft_id = db.save_review_draft(project_id, draft)

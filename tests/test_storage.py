@@ -21,6 +21,7 @@ from devlog.core.review.models import (
     ClaimStatus,
     ReviewClaim,
     ReviewDraft,
+    ReviewQuestion,
 )
 from devlog.core.storage import database as database_module
 from devlog.core.storage.database import DatabaseError, DevLogDB
@@ -80,7 +81,13 @@ def make_sample_draft() -> ReviewDraft:
                 status=ClaimStatus.AI_PENDING,
             ),
         ],
-        questions=["这里发生了什么？", "下一步计划是什么？"],
+        questions=[
+            ReviewQuestion(
+                section=SECTION_TIMELINE,
+                text="这里发生了什么？",
+            ),
+            ReviewQuestion(text="下一步计划是什么？"),
+        ],
     )
 
 

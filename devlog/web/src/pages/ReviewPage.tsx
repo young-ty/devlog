@@ -242,7 +242,14 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
           <div className="panel questions">
             <ol>
               {draft.questions.map((question, index) => (
-                <li key={index}>{question}</li>
+                <li key={index}>
+                  {question.text}
+                  {question.section && (
+                    <span className="question-section">
+                      对应板块：{question.section}
+                    </span>
+                  )}
+                </li>
               ))}
             </ol>
           </div>

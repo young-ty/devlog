@@ -46,6 +46,20 @@ class ReviewClaim:
     user_note: str = ""
 
 
+@dataclass(frozen=True)
+class ReviewQuestion:
+    """一条引导问题，以及它想填上的那个板块。
+
+    为什么要带 section：这个问题问的就是某个板块缺的内容。
+    导出时答案要落回对应板块，而不是堆在文末，
+    否则最后拿到的文档还是一份"只有问题没有答案"的清单。
+    """
+
+    text: str
+    section: str = ""
+    answer: str = ""
+
+
 @dataclass
 class ReviewDraft:
     """由事实、AI 论断和引导问题组装而成的完整复盘文档。"""
@@ -54,5 +68,5 @@ class ReviewDraft:
     range_start: datetime
     range_end: datetime
     claims: list[ReviewClaim] = field(default_factory=list)
-    questions: list[str] = field(default_factory=list)
+    questions: list[ReviewQuestion] = field(default_factory=list)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

@@ -122,6 +122,12 @@ export interface ReviewClaim {
   user_note: string;
 }
 
+export interface ReviewQuestion {
+  text: string;
+  section: string;
+  answer: string;
+}
+
 export interface ReviewDraft {
   draft_id: number;
   project_id: number;
@@ -131,7 +137,7 @@ export interface ReviewDraft {
   range_end: string;
   generated_at: string;
   exported_path: string | null;
-  questions: string[];
+  questions: ReviewQuestion[];
   claims: ReviewClaim[];
 }
 
