@@ -14,6 +14,12 @@ export interface InitResult {
   project_path: string;
 }
 
+export interface DirectoryPickResult {
+  cancelled: boolean;
+  path: string | null;
+  is_git_repo: boolean;
+}
+
 export interface ScanResult {
   project_id: number;
   project_name: string;

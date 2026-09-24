@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { createProject, listProjects } from "../api";
+import { createProject, listProjects, pickDirectory } from "../api";
 import type { Project } from "../types";
-import { formatDateTime } from "../utils";
+import { folderName, formatDateTime } from "../utils";
 
 interface ProjectsPageProps {
   onOpenProject: (
@@ -19,6 +19,7 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
   const [path, setPath] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -64,6 +65,32 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
     }
   }
 
+  async function handleBrowse() {
+    setPicking(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await pickDirectory();
+      if (result.cancelled || !result.path) {
+        // 用户点了取消：什么都不做，不要弹错误吓人。
+        return;
+      }
+      setPath(result.path);
+      if (!name.trim()) {
+        setName(folderName(result.path));
+      }
+      if (!result.is_git_repo) {
+        setError(
+          `已选择 ${result.path}，但这个文件夹不是 Git 仓库（找不到 .git）。请选择仓库根目录，或先在该目录执行 git init。`,
+        );
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPicking(false);
+    }
+  }
+
   const scannedCount = projects.filter(
     (project) => project.last_scanned_commit !== null,
   ).length;
@@ -97,12 +124,27 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
           <span className="panel-hint">路径只在本地访问</span>
         </div>
         <form className="form-grid" onSubmit={handleSubmit}>
-          <input
-            required
-            placeholder="仓库绝对路径，例如 D:\work\demo"
-            value={path}
-            onChange={(event) => setPath(event.target.value)}
-          />
+          <div className="path-row">
+            <input
+              required
+              placeholder="仓库绝对路径，例如 D:\work\demo"
+              value={path}
+              onChange={(event) => setPath(event.target.value)}
+            />
+            <button
+              type="button"
+              className="secondary"
+              onClick={handleBrowse}
+              disabled={picking || busy}
+            >
+              {picking ? "选择中…" : "浏览…"}
+            </button>
+          </div>
+          <p className="form-hint">
+            {picking
+              ? "已打开系统文件夹选择框，请到弹出的窗口里选一个仓库目录。"
+              : "点「浏览…」会在本机弹出一个文件夹选择框，不用再去复制路径。"}
+          </p>
           <input
             placeholder="项目名（可选，默认用文件夹名）"
             value={name}

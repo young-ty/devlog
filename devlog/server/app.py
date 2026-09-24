@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import ipaddress
 from datetime import date
 from pathlib import Path
+from typing import Callable
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +23,7 @@ from devlog.core.llm.deepseek import llm_settings
 from devlog.core.llm.base import LLMError
 from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError, default_db_path
-from devlog.server import schemas
+from devlog.server import desktop, schemas
 
 
 # 前端构建产物默认位置：devlog/web/dist（由 `pnpm build` 生成）。
@@ -67,15 +69,40 @@ def _parse_annotation_kind(value: str) -> AnnotationKind:
         )
 
 
+def is_loopback_request(request: Request) -> bool:
+    """请求是不是来自本机（127.0.0.1 / ::1 / localhost）。
+
+    文件夹选择框会在服务器所在电脑上弹出一个可见窗口，
+    是典型的"本机特权"。如果用户用 --host 0.0.0.0 把服务暴露到局域网，
+    必须确保外面的人不能远程指挥你的桌面弹窗。
+    判定不出来来源时一律拒绝（fail closed）。
+    """
+
+    client = request.client
+    if client is None:
+        return False
+    host = client.host
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def create_app(
     db_path: str | Path | None = None,
     web_dir: str | Path | None = None,
+    directory_picker: Callable[[], str | None] | None = None,
 ) -> FastAPI:
     """构建配置好的 DevLog API 应用（供 uvicorn 与测试使用）。
 
     如果 `devlog/web/dist` 里有前端构建产物，就把静态文件挂到根路径，
     这样一个端口同时提供页面和 API；没有产物时只提供 API，
     开发期继续用 `pnpm dev` 的 5173 端口。
+
+    `directory_picker` 默认调用本机系统对话框；测试时注入假实现，
+    这样跑测试不会真的弹出窗口。
     """
 
     resolved_db = (
@@ -84,6 +111,7 @@ def create_app(
         else str(default_db_path())
     )
     web_dist = resolve_web_dist(web_dir)
+    picker = directory_picker or desktop.pick_directory
     app = FastAPI(
         title="DevLog API",
         description="本地开发复盘工具的 HTTP 接口",
@@ -123,6 +151,36 @@ def create_app(
     )
     def create_project(payload: schemas.ProjectCreate, db=Depends(get_db)):
         return runner.cmd_init(db, payload.path, name=payload.name)
+
+    @app.post(
+        "/api/system/pick-directory",
+        response_model=schemas.DirectoryPickResponse,
+    )
+    def pick_directory(request: Request):
+        """弹出系统文件夹选择框，把用户选中的路径回给网页。"""
+
+        if not is_loopback_request(request):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "文件夹选择框只对本机请求开放。"
+                    "请在本机浏览器打开 DevLog，或手动填写仓库路径。"
+                },
+            )
+        try:
+            picked = picker()
+        except desktop.DirectoryPickerBusy as exc:
+            return JSONResponse(status_code=409, content={"detail": str(exc)})
+        except desktop.DirectoryPickerError as exc:
+            return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+        if not picked:
+            return schemas.DirectoryPickResponse(cancelled=True)
+        path = Path(picked).expanduser()
+        return schemas.DirectoryPickResponse(
+            path=str(path),
+            is_git_repo=runner.is_git_repo(path),
+        )
 
     @app.post(
         "/api/projects/{project_id}/scan",

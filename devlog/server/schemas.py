@@ -32,6 +32,19 @@ class InitResponse(_FromAttributes):
     project_path: str
 
 
+class DirectoryPickResponse(BaseModel):
+    """系统文件夹选择框的结果。
+
+    cancelled 表示用户点了取消 —— 这是正常结果，前端静默处理即可；
+    is_git_repo 让前端在选完就能提示"这里不是 Git 仓库"，
+    不用等注册失败才发现。
+    """
+
+    cancelled: bool = False
+    path: str | None = None
+    is_git_repo: bool = False
+
+
 class ScanRequest(BaseModel):
     reset: bool = False
 

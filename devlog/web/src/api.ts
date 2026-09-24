@@ -9,6 +9,7 @@ import type {
   ConfirmResult,
   DailyNote,
   DailyNoteInput,
+  DirectoryPickResult,
   ExportResult,
   GenerateResult,
   InitResult,
@@ -81,6 +82,13 @@ export function createProject(
   return request<InitResult>(
     "/api/projects",
     jsonInit("POST", { path, name: name || undefined }),
+  );
+}
+
+export function pickDirectory(): Promise<DirectoryPickResult> {
+  return request<DirectoryPickResult>(
+    "/api/system/pick-directory",
+    jsonInit("POST", {}),
   );
 }
 

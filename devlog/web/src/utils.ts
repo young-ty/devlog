@@ -37,3 +37,12 @@ export function formatRange(start: string, end: string): string {
   }
   return `${formatDate(start)} ~ ${formatDate(end)}`;
 }
+
+/** 从绝对路径里取最后一段文件夹名：D:\work\demo → demo。
+
+    末尾可能带分隔符（D:\work\demo\），所以要先去掉再取。
+    取不到时返回空串，由调用方决定要不要用这个名字。 */
+export function folderName(path: string): string {
+  const parts = path.split(/[\\/]+/).filter((part) => part !== "");
+  return parts.length > 0 ? parts[parts.length - 1] : "";
+}

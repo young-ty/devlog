@@ -132,6 +132,21 @@ def _assert_git_repo(repo: Path) -> None:
         raise CLIUsageError(f"不是 Git 仓库：{repo}（请先执行 git init）")
 
 
+def is_git_repo(path: str | Path) -> bool:
+    """路径是不是 Git 工作区；只回答"是/不是"，不抛业务异常。
+
+    给「选完文件夹立刻给提示」这种场景用：前端刚选完目录，
+    需要马上告诉用户"这里没有 .git"，而不是等注册时才报错。
+    复用 _assert_git_repo，保证命令行和网页的判定标准完全一致。
+    """
+
+    try:
+        _assert_git_repo(Path(path))
+    except (CLIUsageError, GitSourceError):
+        return False
+    return True
+
+
 def cmd_init(
     db: DevLogDB,
     path: str | Path | None,

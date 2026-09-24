@@ -92,6 +92,24 @@ class WebSmokeTests(unittest.TestCase):
                 f"timeline page missing annotation call: {function_name}",
             )
 
+    def test_directory_picker_bindings_exist(self) -> None:
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function pickDirectory(", api_text)
+        self.assertIn("/api/system/pick-directory", api_text)
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        self.assertIn("DirectoryPickResult", types_text)
+
+        utils_text = (WEB_DIR / "src" / "utils.ts").read_text(encoding="utf-8")
+        self.assertIn("export function folderName(", utils_text)
+
+        page_text = (
+            WEB_DIR / "src" / "pages" / "ProjectsPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("pickDirectory", page_text)
+        self.assertIn("浏览", page_text)
+        self.assertIn("is_git_repo", page_text)
+
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")

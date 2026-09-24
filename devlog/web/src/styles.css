@@ -316,6 +316,23 @@ button.item-card:focus-visible {
   gap: 10px;
 }
 
+.path-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.path-row button {
+  white-space: nowrap;
+}
+
+.form-hint {
+  margin: -2px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 input {
   display: block;
   width: 100%;
