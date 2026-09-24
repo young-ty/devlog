@@ -32,7 +32,7 @@ from devlog.core.review.models import (
 )
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA_V1_STATEMENTS = [
     """
@@ -174,6 +174,19 @@ _SCHEMA_V4_STATEMENTS = [
     """
     CREATE INDEX IF NOT EXISTS idx_commit_annotations_project_hash
         ON commit_annotations (project_id, commit_hash)
+    """,
+]
+
+_SCHEMA_V5_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS draft_answers (
+        draft_id INTEGER NOT NULL,
+        question_number INTEGER NOT NULL,
+        answer TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (draft_id, question_number),
+        FOREIGN KEY (draft_id) REFERENCES review_drafts (id) ON DELETE CASCADE
+    )
     """,
 ]
 
@@ -359,6 +372,10 @@ class DevLogDB:
             # 版本 3 -> 4 新增记忆层：每日笔记、Bug 捕获与 commit 批注。
             if current < 4:
                 for statement in _SCHEMA_V4_STATEMENTS:
+                    self._conn.execute(statement)
+            # 版本 4 -> 5 新增引导问题的回答表。
+            if current < 5:
+                for statement in _SCHEMA_V5_STATEMENTS:
                     self._conn.execute(statement)
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
@@ -609,6 +626,53 @@ class DevLogDB:
         self._conn.commit()
         return draft_id
 
+    def save_draft_answer(
+        self,
+        draft_id: int,
+        question_number: int,
+        answer: str,
+    ) -> str:
+        """保存某条引导问题的回答，返回写入后的文本。
+
+        问题编号从 1 开始，和导出文档里看到的编号一致 ——
+        中间不做 0/1 转换，省得调用方各自 ±1 出错。
+        """
+
+        record = self.load_review_draft(draft_id)
+        total = len(record.draft.questions)
+        if total == 0:
+            raise DatabaseError("this draft has no guidance questions")
+        if question_number < 1 or question_number > total:
+            raise DatabaseError(
+                f"question number out of range: {question_number} (1..{total})"
+            )
+
+        self._conn.execute(
+            "INSERT INTO draft_answers "
+            "(draft_id, question_number, answer, updated_at) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(draft_id, question_number) DO UPDATE SET "
+            "answer = excluded.answer, updated_at = excluded.updated_at",
+            (
+                draft_id,
+                question_number,
+                answer,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        self._conn.commit()
+        return answer
+
+    def _load_answers(self, draft_id: int) -> dict[int, str]:
+        """读取草稿里所有已保存的回答，键是 1 起算的问题编号。"""
+
+        rows = self._conn.execute(
+            "SELECT question_number, answer FROM draft_answers "
+            "WHERE draft_id = ?",
+            (draft_id,),
+        ).fetchall()
+        return {int(number): text for number, text in rows}
+
     def list_review_drafts(
         self, project_id: int | None = None
     ) -> list[ReviewDraftSummary]:
@@ -662,12 +726,21 @@ class DevLogDB:
             )
 
         created_at = datetime.fromisoformat(row[6])
+        answers = self._load_answers(draft_id)
+        questions = _load_questions(row[7])
         draft = ReviewDraft(
             project_name=row[2],
             range_start=datetime.fromisoformat(row[4]),
             range_end=datetime.fromisoformat(row[5]),
             claims=[item.claim for item in claims],
-            questions=_load_questions(row[7]),
+            questions=[
+                ReviewQuestion(
+                    text=question.text,
+                    section=question.section,
+                    answer=answers.get(number, ""),
+                )
+                for number, question in enumerate(questions, start=1)
+            ],
             generated_at=created_at,
         )
         return StoredReviewDraft(

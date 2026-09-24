@@ -32,7 +32,7 @@ from devlog.core.llm.themes import (
 from devlog.core.llm.translation import translate_commit_subjects
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import write_markdown
-from devlog.core.review.models import ClaimStatus
+from devlog.core.review.models import ClaimStatus, ReviewQuestion
 from devlog.core.storage.database import (
     DevLogDB,
     ReviewDraftSummary,
@@ -388,6 +388,31 @@ def cmd_review_confirm(
         changed=changed,
         remaining_pending=remaining,
     )
+
+
+def cmd_review_answer(
+    db: DevLogDB,
+    draft_id: int,
+    question_number: int,
+    answer: str,
+) -> ReviewQuestion:
+    """保存某条引导问题的回答，返回更新后的问题。
+
+    问题编号从 1 开始，和网页/导出文档里显示的编号一致。
+    """
+
+    record = db.load_review_draft(draft_id)
+    total = len(record.draft.questions)
+    if total == 0:
+        raise CLIUsageError("这份草稿没有引导问题")
+    if question_number < 1 or question_number > total:
+        raise CLIUsageError(
+            f"问题序号超出范围：{question_number}（本草稿共 {total} 个问题）"
+        )
+
+    db.save_draft_answer(draft_id, question_number, answer)
+    updated = db.load_review_draft(draft_id)
+    return updated.draft.questions[question_number - 1]
 
 
 def _default_export_path(record: StoredReviewDraft) -> Path:

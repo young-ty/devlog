@@ -90,6 +90,57 @@ class APIFlowTests(unittest.TestCase):
     def tearDown(self) -> None:
         force_remove(self.root)
 
+    def test_guidance_answers_are_saved_and_exported(self) -> None:
+        """引导问题要能写、能存，并且导出时落进对应板块。"""
+
+        answer = "踩坑：SQLite 连接跨线程要用 check_same_thread=False。"
+        with TestClient(self.app) as client:
+            project_id = client.post(
+                "/api/projects", json={"path": str(self.repo)}
+            ).json()["project_id"]
+            client.post(f"/api/projects/{project_id}/scan", json={})
+            draft_id = client.post(
+                f"/api/projects/{project_id}/reviews/generate",
+                json={"offline": True},
+            ).json()["draft_id"]
+
+            draft = client.get(f"/api/reviews/{draft_id}").json()
+            self.assertEqual(len(draft["questions"]), 3)
+            self.assertTrue(
+                all(item["answer"] == "" for item in draft["questions"])
+            )
+            self.assertEqual(
+                [item["section"] for item in draft["questions"]],
+                ["技术决策记录", "踩坑总结", "遗留与下一步"],
+            )
+
+            saved = client.put(
+                f"/api/reviews/{draft_id}/answers/2",
+                json={"answer": answer},
+            )
+            self.assertEqual(saved.status_code, 200)
+            self.assertEqual(saved.json()["section"], "踩坑总结")
+            self.assertEqual(saved.json()["answer"], answer)
+
+            reloaded = client.get(f"/api/reviews/{draft_id}").json()
+            self.assertEqual(reloaded["questions"][1]["answer"], answer)
+            self.assertEqual(reloaded["questions"][0]["answer"], "")
+
+            out_of_range = client.put(
+                f"/api/reviews/{draft_id}/answers/9",
+                json={"answer": "越界"},
+            )
+            self.assertEqual(out_of_range.status_code, 400)
+
+            exported = client.post(
+                f"/api/reviews/{draft_id}/export", json={}
+            )
+            self.assertEqual(exported.status_code, 200)
+            text = Path(exported.json()["path"]).read_text(encoding="utf-8")
+            lessons = text.split("## 踩坑总结")[1].split("##")[0]
+            self.assertIn(answer, lessons)
+            self.assertNotIn(answer, text.split("## 待补充的问题")[1])
+
     def test_end_to_end_project_scan_review_confirm_export(self) -> None:
         with TestClient(self.app) as client:
             response = client.get("/api/projects")

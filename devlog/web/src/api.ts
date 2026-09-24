@@ -17,6 +17,7 @@ import type {
   Project,
   ProjectTimeline,
   ReviewDraft,
+  ReviewQuestion,
   ReviewSummary,
   ScanResult,
   SuggestTitleInput,
@@ -165,6 +166,17 @@ export function exportReview(draftId: number): Promise<ExportResult> {
   return request<ExportResult>(
     `/api/reviews/${draftId}/export`,
     jsonInit("POST", {}),
+  );
+}
+
+export function saveAnswer(
+  draftId: number,
+  questionNumber: number,
+  answer: string,
+): Promise<ReviewQuestion> {
+  return request<ReviewQuestion>(
+    `/api/reviews/${draftId}/answers/${questionNumber}`,
+    jsonInit("PUT", { answer }),
   );
 }
 

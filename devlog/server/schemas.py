@@ -133,6 +133,12 @@ class ConfirmResponse(_FromAttributes):
     remaining_pending: int
 
 
+class AnswerRequest(BaseModel):
+    """引导问题的回答；空字符串表示清空。"""
+
+    answer: str = ""
+
+
 class TimelineCommitResponse(BaseModel):
     hash: str
     short_hash: str

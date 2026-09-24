@@ -307,6 +307,30 @@ def create_app(
             note=payload.note,
         )
 
+    @app.put(
+        "/api/reviews/{draft_id}/answers/{question_number}",
+        response_model=schemas.ReviewQuestionResponse,
+    )
+    def save_review_answer(
+        draft_id: int,
+        question_number: int,
+        payload: schemas.AnswerRequest,
+        db=Depends(get_db),
+    ):
+        """保存引导问题的回答；编号从 1 开始，与页面显示一致。"""
+
+        question = runner.cmd_review_answer(
+            db,
+            draft_id,
+            question_number,
+            payload.answer,
+        )
+        return schemas.ReviewQuestionResponse(
+            text=question.text,
+            section=question.section,
+            answer=question.answer,
+        )
+
     @app.post(
         "/api/reviews/{draft_id}/export",
         response_model=schemas.ExportResponse,

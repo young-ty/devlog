@@ -63,6 +63,15 @@ def _section_placeholder(section: str, draft: ReviewDraft) -> str:
     return SECTION_HINTS.get(section, "> 本板块暂无可自动填充的内容。")
 
 
+def _answer_lines(number: int, answer: str) -> list[str]:
+    """把用户补充的回答渲染成列表项；多行回答要缩进，否则会撑破列表。"""
+
+    head, *rest = answer.splitlines()
+    lines = [f"- ✍️ 我的补充（第 {number} 问）：{head}"]
+    lines.extend(f"  {line}" for line in rest)
+    return lines
+
+
 def export_markdown(draft: ReviewDraft) -> str:
     """把草稿渲染成一份独立的 Markdown 文档。"""
 
@@ -80,18 +89,33 @@ def export_markdown(draft: ReviewDraft) -> str:
         ]
         lines.append(f"## {section}")
         lines.append("")
-        if section_claims:
-            for claim in section_claims:
-                lines.append(_claim_line(claim))
-        else:
+        for claim in section_claims:
+            lines.append(_claim_line(claim))
+
+        answered = [
+            (number, question.answer.strip())
+            for number, question in enumerate(draft.questions, start=1)
+            if question.section == section and question.answer.strip()
+        ]
+        for number, answer in answered:
+            lines.extend(_answer_lines(number, answer))
+
+        if not section_claims and not answered:
             lines.append(_section_placeholder(section, draft))
         lines.append("")
 
-    if draft.questions:
-        lines.append("## 待回答的问题（人机共创）")
+    # 已经回答过的问题已经把内容落到对应板块，这里只列还缺的部分，
+    # 免得导出文档里出现一堆"问题 + 重复答案"。
+    pending = [
+        (number, question)
+        for number, question in enumerate(draft.questions, start=1)
+        if not question.answer.strip()
+    ]
+    if pending:
+        lines.append("## 待补充的问题（人机共创）")
         lines.append("")
-        for index, question in enumerate(draft.questions, start=1):
-            lines.append(f"{index}. {question.text}")
+        for number, question in pending:
+            lines.append(f"{number}. {question.text}")
         lines.append("")
 
     lines.append("---")

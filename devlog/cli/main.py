@@ -119,6 +119,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="输出文件路径（默认 <仓库>/docs/retrospectives/）",
     )
 
+    answer_parser = review_sub.add_parser(
+        "answer", help="回答草稿末尾的引导问题"
+    )
+    answer_parser.add_argument("draft_id", type=int, help="草稿 ID")
+    answer_parser.add_argument(
+        "number", type=int, help="问题序号（从 1 开始，和文档里一致）"
+    )
+    answer_parser.add_argument(
+        "--text", required=True, help="回答内容（回答会写进对应的板块）"
+    )
+
     serve_parser = sub.add_parser(
         "serve",
         help="启动本地 API 服务（配合 Web 前端或接口调试）",
@@ -278,6 +289,14 @@ def main(argv: list[str] | None = None) -> int:
                         db, args.draft_id, output=args.output
                     )
                     print(f"已导出复盘文档：{target}")
+                elif args.review_command == "answer":
+                    question = runner.cmd_review_answer(
+                        db, args.draft_id, args.number, args.text
+                    )
+                    print(
+                        f"已保存第 {args.number} 个问题的回答"
+                        f"（对应板块：{question.section or '未指定'}）"
+                    )
         return 0
     except (
         runner.CLIUsageError,

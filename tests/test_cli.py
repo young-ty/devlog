@@ -18,6 +18,7 @@ from devlog.cli import runner
 from devlog.cli.main import main as cli_main
 from devlog.core.review.models import (
     SECTION_ASSETS,
+    SECTION_DECISIONS,
     SECTION_OVERVIEW,
     SECTION_TIMELINE,
     ClaimStatus,
@@ -166,6 +167,51 @@ class CLIFlowTests(unittest.TestCase):
             runner.cmd_init(db, self.repo)
             with self.assertRaises(runner.CLIUsageError):
                 runner.cmd_review_generate(db, self.repo, offline=True)
+
+    def test_review_answer_saves_and_rejects_bad_number(self) -> None:
+        with DevLogDB(self.db_path) as db:
+            runner.cmd_init(db, self.repo)
+            runner.cmd_scan(db, self.repo)
+            draft_id = runner.cmd_review_generate(
+                db, self.repo, offline=True
+            ).draft_id
+
+            updated = runner.cmd_review_answer(
+                db, draft_id, 1, "选 SQLite 是因为要做到零部署。"
+            )
+            self.assertEqual(updated.section, SECTION_DECISIONS)
+            self.assertEqual(updated.answer, "选 SQLite 是因为要做到零部署。")
+
+            reloaded = runner.cmd_review_show(db, draft_id)
+            self.assertEqual(
+                reloaded.draft.questions[0].answer,
+                "选 SQLite 是因为要做到零部署。",
+            )
+
+            with self.assertRaises(runner.CLIUsageError):
+                runner.cmd_review_answer(db, draft_id, 0, "越界")
+            with self.assertRaises(runner.CLIUsageError):
+                runner.cmd_review_answer(db, draft_id, 99, "越界")
+
+        sink = io.StringIO()
+        with DevLogDB(self.db_path) as db:
+            draft_id = runner.cmd_review_list(db, self.repo)[0].draft_id
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            code = cli_main(
+                [
+                    "--db",
+                    str(self.db_path),
+                    "review",
+                    "answer",
+                    str(draft_id),
+                    "3",
+                    "--text",
+                    "下一步先补齐评测集。",
+                ]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("已保存第 3 个问题的回答", sink.getvalue())
+        self.assertIn("遗留与下一步", sink.getvalue())
 
     def test_online_generate_uses_provider_summaries(self) -> None:
         with DevLogDB(self.db_path) as db:

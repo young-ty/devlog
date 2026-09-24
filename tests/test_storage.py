@@ -28,7 +28,9 @@ from devlog.core.storage.database import DatabaseError, DevLogDB
 
 
 TZ = timezone(timedelta(hours=8))
-SCHEMA_VERSION = 4
+# 故意写死而不是引用模块常量：schema 版本一变，这里就必须有人手动改一次，
+# 逼着作者回来看"新版本的表和迁移测试都补了吗"。
+SCHEMA_VERSION = 5
 
 
 def at(day: int) -> datetime:
@@ -103,6 +105,45 @@ class DevLogDBTests(unittest.TestCase):
 
     def test_schema_version_is_created(self) -> None:
         self.assertEqual(self.db.schema_version, SCHEMA_VERSION)
+
+    def test_draft_answers_round_trip_and_overwrite(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+
+        fresh = self.db.load_review_draft(draft_id)
+        self.assertEqual(
+            [question.answer for question in fresh.draft.questions],
+            ["", ""],
+        )
+
+        self.db.save_draft_answer(draft_id, 2, "下一步先补测试")
+        loaded = self.db.load_review_draft(draft_id)
+        self.assertEqual(loaded.draft.questions[1].answer, "下一步先补测试")
+        self.assertEqual(loaded.draft.questions[0].answer, "")
+        # 问题本身不受影响，回答只挂在编号上
+        self.assertEqual(
+            loaded.draft.questions[1].text,
+            "下一步计划是什么？",
+        )
+
+        self.db.save_draft_answer(draft_id, 2, "改成先补文档了")
+        self.assertEqual(
+            self.db.load_review_draft(draft_id).draft.questions[1].answer,
+            "改成先补文档了",
+        )
+
+    def test_draft_answer_rejects_out_of_range_numbers(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+
+        for number in (0, -1, 3):
+            with self.subTest(number=number):
+                with self.assertRaises(DatabaseError):
+                    self.db.save_draft_answer(draft_id, number, "越界")
+
+    def test_draft_answer_requires_existing_draft(self) -> None:
+        with self.assertRaises(DatabaseError):
+            self.db.save_draft_answer(999, 1, "没有这份草稿")
 
     def test_connection_can_be_used_from_another_thread(self) -> None:
         """FastAPI 依赖与路由可能跑在不同线程，连接必须支持跨线程使用。"""

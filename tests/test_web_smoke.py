@@ -110,6 +110,22 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("浏览", page_text)
         self.assertIn("is_git_repo", page_text)
 
+    def test_guidance_answer_bindings_exist(self) -> None:
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function saveAnswer(", api_text)
+        self.assertIn("/answers/", api_text)
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        self.assertIn("ReviewQuestion", types_text)
+        self.assertIn("questions: ReviewQuestion[]", types_text)
+
+        page_text = (
+            WEB_DIR / "src" / "pages" / "ReviewPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("saveAnswer", page_text)
+        self.assertIn("<textarea", page_text)
+        self.assertIn("保存回答", page_text)
+
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")

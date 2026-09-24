@@ -43,6 +43,7 @@ devlog init .
 devlog scan .
 devlog review generate --offline
 devlog review list
+devlog review answer 1 1 --text "选 SQLite 是因为要做到零依赖部署"
 devlog review confirm 1 --all
 devlog review export 1
 ```
@@ -135,7 +136,11 @@ devlog/
 2. 在「项目」页点 **浏览…**，用系统弹出的文件夹选择框挑一个 Git 仓库
    （不用手动复制路径；选完还会自动用文件夹名填好项目名）；
 3. 点「注册项目」，进去后先「扫描」再「生成草稿」；
-4. 只有改前端代码时才需要 `pnpm dev`，日常使用不碰它。
+4. 打开一份草稿，逐条确认 AI 论断，并在文末的引导问题里写补充 ——
+   回答会保存下来，导出时自动落进对应的板块（决策 / 踩坑 / 下一步）。
+   引导问题只有三条，都是 Git 里查不到、只有你本人知道的东西；
+   Bug 相关的内容直接来自 Bug 捕获记录，不用重复回答。
+5. 只有改前端代码时才需要 `pnpm dev`，日常使用不碰它。
 
 「浏览…」只在**请求来自本机**时可用：对话框会在运行 DevLog 的那台电脑上弹出，
 所以后端会先确认请求来自 127.0.0.1 / ::1 再弹窗。如果你用

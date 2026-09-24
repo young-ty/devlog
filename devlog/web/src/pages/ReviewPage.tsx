@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { confirmClaims, exportReview, getReviewDraft } from "../api";
+import {
+  confirmClaims,
+  exportReview,
+  getReviewDraft,
+  saveAnswer,
+} from "../api";
 import type { ReviewDraft } from "../types";
 import { ClaimCard } from "../components/ClaimCard";
 import { formatDateTime, formatRange } from "../utils";
@@ -16,6 +21,11 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  // 未保存的输入草稿，键是问题编号（从 1 开始）。
+  const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>(
+    {},
+  );
+  const [savingNumber, setSavingNumber] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +103,41 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
     }
   }
 
+  async function handleSaveAnswer(number: number) {
+    const value = answerDrafts[number];
+    if (value === undefined) {
+      return;
+    }
+    setSavingNumber(number);
+    setError("");
+    setSuccess("");
+    try {
+      const updated = await saveAnswer(draftId, number, value);
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              questions: current.questions.map((question, index) =>
+                index === number - 1 ? updated : question,
+              ),
+            }
+          : current,
+      );
+      setAnswerDrafts((current) => {
+        const next = { ...current };
+        delete next[number];
+        return next;
+      });
+      setSuccess(
+        `已保存第 ${number} 个问题的回答，导出时会写进「${updated.section || "复盘文档"}」。`,
+      );
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingNumber(null);
+    }
+  }
+
   if (loading) {
     return (
       <main className="container">
@@ -117,6 +162,10 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
       sections.push(claim.section);
     }
   }
+
+  const answeredCount = draft.questions.filter(
+    (question) => question.answer.trim() !== "",
+  ).length;
 
   const pendingCount = draft.claims.filter(
     (claim) => claim.status === "ai_pending",
@@ -237,21 +286,54 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
         <section className="section">
           <div className="panel-head">
             <h2>留给你思考的问题</h2>
-            <span className="panel-hint">AI 无法从 Git 中推断的部分</span>
+            <span className="panel-hint">
+              已补充 {answeredCount}/{draft.questions.length} · 回答会写进对应板块
+            </span>
           </div>
           <div className="panel questions">
-            <ol>
-              {draft.questions.map((question, index) => (
-                <li key={index}>
-                  {question.text}
-                  {question.section && (
-                    <span className="question-section">
-                      对应板块：{question.section}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
+            {draft.questions.map((question, index) => {
+              const number = index + 1;
+              const value = answerDrafts[number] ?? question.answer;
+              const dirty = value !== question.answer;
+              return (
+                <article key={number} className="question-card">
+                  <div className="question-head">
+                    <span className="question-index">{number}</span>
+                    <div>
+                      <p className="question-text">{question.text}</p>
+                      {question.section && (
+                        <span className="question-section">
+                          回答会写进「{question.section}」
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <textarea
+                    rows={3}
+                    placeholder="在这里写下你的补充，比如当时的取舍、踩到坑的位置…"
+                    value={value}
+                    onChange={(event) =>
+                      setAnswerDrafts((current) => ({
+                        ...current,
+                        [number]: event.target.value,
+                      }))
+                    }
+                  />
+                  <div className="question-actions">
+                    <button
+                      className="secondary"
+                      disabled={!dirty || busy || savingNumber !== null}
+                      onClick={() => handleSaveAnswer(number)}
+                    >
+                      {savingNumber === number ? "保存中…" : "保存回答"}
+                    </button>
+                    {!dirty && question.answer.trim() !== "" && (
+                      <span className="question-saved">已保存</span>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}

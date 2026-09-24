@@ -21,6 +21,7 @@ from devlog.core.review.models import (
     SECTION_OVERVIEW,
     SECTION_TIMELINE,
     ClaimStatus,
+    ReviewQuestion,
 )
 from devlog.core.theming.models import SilencePeriod, Theme
 
@@ -170,7 +171,7 @@ class MarkdownExportTests(unittest.TestCase):
         self.assertIn("## 项目概述", text)
         self.assertIn("## 开发时间线", text)
         self.assertIn("AI 推断", text)
-        self.assertIn("待回答的问题", text)
+        self.assertIn("待补充的问题", text)
         self.assertIn("来源：`" + f"{1:040d}" + "`", text)
 
     def test_write_creates_parent_directories(self) -> None:
@@ -306,6 +307,59 @@ class SectionPlaceholderTests(unittest.TestCase):
         )
         issues_block = export_markdown(draft).split("## 问题与解决")[1]
         self.assertIn("Bug 捕获", issues_block.split("##")[0])
+
+
+class AnswerExportTests(unittest.TestCase):
+    """用户填的回答要落回对应板块，而不是堆在文末。"""
+
+    def _draft(self, answers: dict[int, str] | None = None):
+        draft = build_review_draft(
+            project_name="demo",
+            range_start=at(1),
+            range_end=at(2),
+            events=[make_event(1, 1)],
+            themes=[],
+            theme_summaries=[],
+            silence_periods=[],
+        )
+        merged = answers or {}
+        draft.questions = [
+            ReviewQuestion(
+                text=question.text,
+                section=question.section,
+                answer=merged.get(number, ""),
+            )
+            for number, question in enumerate(draft.questions, start=1)
+        ]
+        return draft
+
+    def test_answer_is_rendered_inside_its_section(self) -> None:
+        text = export_markdown(self._draft({1: "选 SQLite 是因为要零部署。"}))
+        decisions = text.split("## 技术决策记录")[1].split("##")[0]
+        self.assertIn("✍️ 我的补充（第 1 问）", decisions)
+        self.assertIn("选 SQLite 是因为要零部署。", decisions)
+        self.assertNotIn("请回答文末第 1 个引导问题", decisions)
+
+    def test_answered_question_drops_out_of_pending_list(self) -> None:
+        text = export_markdown(self._draft({1: "已经写过了。"}))
+        pending = text.split("## 待补充的问题（人机共创）")[1]
+        self.assertNotIn("技术选型", pending)
+        self.assertIn("2. ", pending)
+        self.assertIn("3. ", pending)
+
+    def test_all_answered_removes_pending_section(self) -> None:
+        text = export_markdown(
+            self._draft({1: "a", 2: "b", 3: "c"})
+        )
+        self.assertNotIn("待补充的问题", text)
+
+    def test_multiline_answer_is_indented(self) -> None:
+        text = export_markdown(self._draft({3: "第一行\n第二行"}))
+        self.assertIn("- ✍️ 我的补充（第 3 问）：第一行\n  第二行", text)
+
+    def test_blank_answer_is_treated_as_unanswered(self) -> None:
+        text = export_markdown(self._draft({1: "   "}))
+        self.assertIn("请回答文末第 1 个引导问题", text)
 
 
 if __name__ == "__main__":
