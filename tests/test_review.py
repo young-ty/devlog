@@ -361,6 +361,19 @@ class AnswerExportTests(unittest.TestCase):
         text = export_markdown(self._draft({1: "   "}))
         self.assertIn("请回答文末第 1 个引导问题", text)
 
+    def test_legacy_answer_without_section_is_kept(self) -> None:
+        """老草稿的问题没有板块归属，回答也不能在导出时凭空消失。"""
+
+        draft = self._draft()
+        draft.questions = [
+            ReviewQuestion(text="老问题：这段时间在忙什么？", answer="在赶秋招投递。"),
+            ReviewQuestion(text="老问题二", answer=""),
+        ]
+        text = export_markdown(draft)
+        self.assertIn("## 其他补充（人机共创）", text)
+        self.assertIn("在赶秋招投递。", text)
+        self.assertNotIn("老问题：这段时间在忙什么？", text.split("## 待补充的问题")[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -106,6 +106,20 @@ def export_markdown(draft: ReviewDraft) -> str:
 
     # 已经回答过的问题已经把内容落到对应板块，这里只列还缺的部分，
     # 免得导出文档里出现一堆"问题 + 重复答案"。
+    # 老草稿的问题没有板块归属（section 为空）：回答也没地方落，
+    # 统一收在「其他补充」里，宁可多一节，也不能让用户白写。
+    orphan_answers = [
+        (number, question.answer.strip())
+        for number, question in enumerate(draft.questions, start=1)
+        if question.answer.strip() and question.section not in SECTION_ORDER
+    ]
+    if orphan_answers:
+        lines.append("## 其他补充（人机共创）")
+        lines.append("")
+        for number, answer in orphan_answers:
+            lines.extend(_answer_lines(number, answer))
+        lines.append("")
+
     pending = [
         (number, question)
         for number, question in enumerate(draft.questions, start=1)
