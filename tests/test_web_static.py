@@ -98,5 +98,57 @@ class SinglePortServingTests(unittest.TestCase):
         self.assertIsNone(app.state.web_dist)
 
 
+class StaticCacheHeaderTests(unittest.TestCase):
+    """换版本后浏览器必须能拿到新页面，而不是继续吃缓存里的旧界面。
+
+    `index.html` 的文件名永远不变，之前没有任何 `Cache-Control`，浏览器就按
+    `Last-Modified` 做启发式缓存，于是出现"exe 是新的、界面还是旧的"。
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.dist = self.root / "dist"
+        (self.dist / "assets").mkdir(parents=True)
+        (self.dist / "index.html").write_text(INDEX_HTML, encoding="utf-8")
+        (self.dist / "assets" / "index-CbkUX14t.js").write_text(
+            "console.log('devlog');\n", encoding="utf-8"
+        )
+        self.db_path = self.root / "cache.db"
+        self.app = create_app(self.db_path, web_dir=self.dist)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_index_html_must_revalidate(self) -> None:
+        with TestClient(self.app) as client:
+            root = client.get("/")
+            named = client.get("/index.html")
+        self.assertEqual(root.status_code, 200)
+        self.assertEqual(root.headers["cache-control"], "no-cache")
+        self.assertEqual(named.headers["cache-control"], "no-cache")
+
+    def test_hashed_bundle_is_cached_immutably(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.get("/assets/index-CbkUX14t.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("immutable", response.headers["cache-control"])
+        self.assertIn("max-age=31536000", response.headers["cache-control"])
+
+    def test_revalidation_still_carries_the_header(self) -> None:
+        with TestClient(self.app) as client:
+            first = client.get("/")
+            etag = first.headers["etag"]
+            second = client.get("/", headers={"If-None-Match": etag})
+        self.assertEqual(second.status_code, 304)
+        # 304 也要带 no-cache，否则浏览器下次又回到启发式缓存。
+        self.assertEqual(second.headers["cache-control"], "no-cache")
+
+    def test_missing_asset_still_404s(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.get("/assets/not-there.js")
+        self.assertEqual(response.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

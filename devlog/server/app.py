@@ -25,6 +25,7 @@ from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError, default_db_path
 from devlog.core.timeline.events import DEFAULT_EVENT_LIMIT
 from devlog.server import desktop, schemas
+from devlog.server.static_cache import CacheControlledStatic
 
 
 # 前端构建产物默认位置：devlog/web/dist（由 `pnpm build` 生成）。
@@ -623,7 +624,7 @@ def create_app(
     if web_dist is not None:
         app.mount(
             "/",
-            StaticFiles(directory=web_dist, html=True),
+            CacheControlledStatic(StaticFiles(directory=web_dist, html=True)),
             name="web",
         )
 
