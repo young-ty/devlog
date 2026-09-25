@@ -73,6 +73,7 @@ class GenerateResponse(_FromAttributes):
     claim_count: int
     ai_pending_count: int
     question_count: int
+    asset_count: int
     offline: bool
 
 
@@ -114,6 +115,7 @@ class ReviewDraftResponse(BaseModel):
     range_start: datetime
     range_end: datetime
     generated_at: datetime
+    generation_mode: str = "unknown"
     exported_path: str | None = None
     questions: list[ReviewQuestionResponse] = Field(default_factory=list)
     claims: list[ReviewClaimResponse] = Field(default_factory=list)

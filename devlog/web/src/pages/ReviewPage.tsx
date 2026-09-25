@@ -14,6 +14,28 @@ interface ReviewPageProps {
   onBack: () => void;
 }
 
+// 板块的固定展示顺序。AI 这次没产出内容的板块也保留位置：
+// 用户需要分清"功能压根没跑"和"跑了但没找到候选"。
+const SECTION_ORDER = [
+  "项目概述",
+  "开发时间线",
+  "技术决策记录",
+  "问题与解决",
+  "踩坑总结",
+  "可复用资产",
+  "遗留与下一步",
+];
+
+function emptySectionHint(section: string, generationMode: string): string {
+  if (section === "可复用资产") {
+    if (generationMode === "offline") {
+      return "离线模式不做可复用资产归纳；用「生成中文复盘（AI）」可以额外归纳跨主题的候选。";
+    }
+    return "本次 AI 归纳没有找到值得沉淀为可复用资产的候选。";
+  }
+  return "本次生成没有产出这一类内容，可以参考下方的引导问题补充。";
+}
+
 export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,12 +178,15 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
     );
   }
 
-  const sections: string[] = [];
+  const sections: string[] = [...SECTION_ORDER];
   for (const claim of draft.claims) {
     if (!sections.includes(claim.section)) {
       sections.push(claim.section);
     }
   }
+  // 历史草稿没有资产归纳这一步，空板块不逐个占位（否则满屏都是空的），
+  // 改成页面顶部一条整体说明。
+  const showEmptySections = draft.generation_mode !== "unknown";
 
   const answeredCount = draft.questions.filter(
     (question) => question.answer.trim() !== "",
@@ -198,6 +223,15 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
 
       {error && <p className="message error">{error}</p>}
       {success && <p className="message success">{success}</p>}
+
+      {draft.generation_mode === "unknown" && (
+        <section className="panel">
+          <p className="panel-hint">
+            这份草稿由旧版本生成：不包含「可复用资产」归纳，模板问题也可能是旧的。
+            用项目页的「生成中文复盘（AI）」重新生成，即可得到新版结构。
+          </p>
+        </section>
+      )}
 
       <div className="stat-grid">
         <div className="stat-card">
@@ -259,6 +293,9 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
         const claims = draft.claims.filter(
           (claim) => claim.section === section,
         );
+        if (claims.length === 0 && !showEmptySections) {
+          return null;
+        }
         const sectionPending = claims.filter(
           (claim) => claim.status === "ai_pending",
         ).length;
@@ -271,13 +308,19 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
                 {sectionPending > 0 ? ` · ${sectionPending} 条待确认` : ""}
               </span>
             </div>
-            {claims.map((claim) => (
-              <ClaimCard
-                key={claim.id}
-                claim={claim}
-                onConfirm={confirmOne}
-              />
-            ))}
+            {claims.length === 0 ? (
+              <p className="panel-hint">
+                {emptySectionHint(section, draft.generation_mode)}
+              </p>
+            ) : (
+              claims.map((claim) => (
+                <ClaimCard
+                  key={claim.id}
+                  claim={claim}
+                  onConfirm={confirmOne}
+                />
+              ))
+            )}
           </section>
         );
       })}

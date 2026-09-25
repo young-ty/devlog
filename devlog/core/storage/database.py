@@ -32,7 +32,7 @@ from devlog.core.review.models import (
 )
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SCHEMA_V1_STATEMENTS = [
     """
@@ -187,6 +187,17 @@ _SCHEMA_V5_STATEMENTS = [
         PRIMARY KEY (draft_id, question_number),
         FOREIGN KEY (draft_id) REFERENCES review_drafts (id) ON DELETE CASCADE
     )
+    """,
+]
+
+# 版本 5 -> 6：草稿记录自己是 AI 生成还是离线骨架。
+# 可复用资产只有 AI 模式会归纳，前端需要这个字段才能把
+# "AI 归纳过但没找到候选"和"离线模式根本没归纳"区分开。
+# 老草稿留成 unknown，界面按中性文案处理。
+_SCHEMA_V6_STATEMENTS = [
+    """
+    ALTER TABLE review_drafts
+        ADD COLUMN generation_mode TEXT NOT NULL DEFAULT 'unknown'
     """,
 ]
 
@@ -385,6 +396,10 @@ class DevLogDB:
             # 版本 4 -> 5 新增引导问题的回答表。
             if current < 5:
                 for statement in _SCHEMA_V5_STATEMENTS:
+                    self._conn.execute(statement)
+            # 版本 5 -> 6 记录草稿的生成方式（ai / offline / unknown）。
+            if current < 6:
+                for statement in _SCHEMA_V6_STATEMENTS:
                     self._conn.execute(statement)
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
@@ -599,8 +614,9 @@ class DevLogDB:
 
         cursor = self._conn.execute(
             "INSERT INTO review_drafts "
-            "(project_id, range_start, range_end, created_at, questions_json) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "(project_id, range_start, range_end, created_at, questions_json, "
+            "generation_mode) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 project_id,
                 draft.range_start.isoformat(),
@@ -613,6 +629,7 @@ class DevLogDB:
                     ],
                     ensure_ascii=False,
                 ),
+                draft.generation_mode,
             ),
         )
         draft_id = int(cursor.lastrowid)
@@ -706,7 +723,7 @@ class DevLogDB:
         row = self._conn.execute(
             "SELECT d.id, d.project_id, p.name, p.path, "
             "d.range_start, d.range_end, d.created_at, "
-            "d.questions_json, d.exported_path "
+            "d.questions_json, d.exported_path, d.generation_mode "
             "FROM review_drafts d "
             "JOIN projects p ON p.id = d.project_id "
             "WHERE d.id = ?",
@@ -751,6 +768,7 @@ class DevLogDB:
                 for number, question in enumerate(questions, start=1)
             ],
             generated_at=created_at,
+            generation_mode=row[9],
         )
         return StoredReviewDraft(
             draft_id=draft_id,

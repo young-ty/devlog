@@ -297,7 +297,7 @@ class CaptureSchemaMigrationTests(unittest.TestCase):
 
             upgraded = DevLogDB(path)
             try:
-                self.assertEqual(upgraded.schema_version, 5)
+                self.assertEqual(upgraded.schema_version, 6)
                 same_id = upgraded.register_project("renamed", "D:/work/demo")
                 self.assertEqual(same_id, 1)
                 bug_id = upgraded.create_bug_record(

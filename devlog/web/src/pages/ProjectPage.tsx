@@ -104,7 +104,7 @@ export function ProjectPage({
     try {
       const result = await generateReview(projectId, true);
       setSuccess(
-        `已生成草稿 #${result.draft_id}（离线模式）：${result.claim_count} 条论断、${result.question_count} 个引导问题`,
+        `已生成草稿 #${result.draft_id}（离线模式）：${result.claim_count} 条论断、${result.question_count} 个引导问题。离线模式不做可复用资产归纳。`,
       );
       setReloadKey((key) => key + 1);
     } catch (err) {
@@ -121,7 +121,7 @@ export function ProjectPage({
     try {
       const result = await generateReview(projectId, false);
       setSuccess(
-        `已生成 AI 草稿 #${result.draft_id}（中文摘要）：${result.claim_count} 条论断、${result.question_count} 个引导问题`,
+        `已生成 AI 草稿 #${result.draft_id}（中文摘要）：${result.claim_count} 条论断、${result.question_count} 个引导问题、可复用资产候选 ${result.asset_count} 个`,
       );
       setReloadKey((key) => key + 1);
     } catch (err) {
@@ -223,6 +223,11 @@ export function ProjectPage({
             api_key（或设置环境变量 DEEPSEEK_API_KEY）。
           </p>
         )}
+        <p className="panel-hint" style={{ marginTop: 12 }}>
+          「生成中文复盘（AI）」会额外归纳跨主题的可复用资产候选（最多 5
+          个），并作为待确认论断放进草稿的「可复用资产」板块；
+          「生成快速骨架（离线）」只做规则摘要，不会归纳资产。
+        </p>
       </section>
 
       <section className="panel">

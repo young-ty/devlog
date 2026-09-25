@@ -8,6 +8,7 @@ from devlog.core.capture.models import BugRecord, BugStatus
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.themes import AssetSummary, ThemeSummary
 from devlog.core.review.models import (
+    GENERATION_MODE_UNKNOWN,
     SECTION_ASSETS,
     SECTION_DECISIONS,
     SECTION_ISSUES,
@@ -70,6 +71,7 @@ def build_review_draft(
     factual_summaries: bool = False,
     bug_records: list[BugRecord] | None = None,
     asset_summaries: list[AssetSummary] | None = None,
+    generation_mode: str = GENERATION_MODE_UNKNOWN,
 ) -> ReviewDraft:
     """基于事实与 AI 摘要构建结构化草稿。
 
@@ -99,6 +101,7 @@ def build_review_draft(
             range_end=range_end,
             claims=claims,
             questions=questions,
+            generation_mode=generation_mode,
         )
 
     sources = tuple(event.hash for event in meaningful)
@@ -178,4 +181,5 @@ def build_review_draft(
         range_end=range_end,
         claims=claims,
         questions=questions,
+        generation_mode=generation_mode,
     )

@@ -97,6 +97,8 @@ export interface GenerateResult {
   claim_count: number;
   ai_pending_count: number;
   question_count: number;
+  /** 本次归纳出的可复用资产候选数；离线模式恒为 0。 */
+  asset_count: number;
   offline: boolean;
 }
 
@@ -136,6 +138,8 @@ export interface ReviewDraft {
   range_start: string;
   range_end: string;
   generated_at: string;
+  /** ai / offline / unknown：unknown 表示这次改动之前生成的历史草稿。 */
+  generation_mode: string;
   exported_path: string | null;
   questions: ReviewQuestion[];
   claims: ReviewClaim[];

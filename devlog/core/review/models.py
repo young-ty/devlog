@@ -25,6 +25,13 @@ SECTION_ORDER = [
     SECTION_NEXT,
 ]
 
+# 草稿的生成方式：告诉读者这份草稿到底跑没跑 AI 归纳。
+# 可复用资产只有 ai 模式才会归纳，offline 模式只生成规则骨架，
+# unknown 用于本次改动之前生成的历史草稿。
+GENERATION_MODE_AI = "ai"
+GENERATION_MODE_OFFLINE = "offline"
+GENERATION_MODE_UNKNOWN = "unknown"
+
 
 class ClaimStatus(str, enum.Enum):
     """复盘草稿中一条论断的生命周期。"""
@@ -70,3 +77,4 @@ class ReviewDraft:
     claims: list[ReviewClaim] = field(default_factory=list)
     questions: list[ReviewQuestion] = field(default_factory=list)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generation_mode: str = GENERATION_MODE_UNKNOWN

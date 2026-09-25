@@ -13,6 +13,9 @@ from devlog.core.llm.themes import AssetSummary, ThemeSummary
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import ReviewExportError, export_markdown, write_markdown
 from devlog.core.review.models import (
+    GENERATION_MODE_AI,
+    GENERATION_MODE_OFFLINE,
+    GENERATION_MODE_UNKNOWN,
     SECTION_ASSETS,
     SECTION_DECISIONS,
     SECTION_ISSUES,
@@ -71,6 +74,35 @@ def sample_summary() -> ThemeSummary:
 
 
 class ReviewEngineTests(unittest.TestCase):
+    def test_generation_mode_defaults_to_unknown_and_can_be_set(self) -> None:
+        """没显式传模式时按 unknown 处理，避免假装跑过 AI 归纳。"""
+
+        kwargs = dict(
+            project_name="demo",
+            range_start=at(1),
+            range_end=at(2),
+            events=[make_event(1, 1)],
+            themes=[],
+            theme_summaries=[],
+            silence_periods=[],
+        )
+        self.assertEqual(
+            build_review_draft(**kwargs).generation_mode,
+            GENERATION_MODE_UNKNOWN,
+        )
+        self.assertEqual(
+            build_review_draft(
+                **kwargs, generation_mode=GENERATION_MODE_AI
+            ).generation_mode,
+            GENERATION_MODE_AI,
+        )
+        self.assertEqual(
+            build_review_draft(
+                **kwargs, generation_mode=GENERATION_MODE_OFFLINE
+            ).generation_mode,
+            GENERATION_MODE_OFFLINE,
+        )
+
     def test_builds_full_draft(self) -> None:
         events = [make_event(1, 1), make_event(2, 2)]
         themes = [sample_theme()]

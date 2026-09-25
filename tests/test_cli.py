@@ -17,6 +17,8 @@ from unittest import mock
 from devlog.cli import runner
 from devlog.cli.main import main as cli_main
 from devlog.core.review.models import (
+    GENERATION_MODE_AI,
+    GENERATION_MODE_OFFLINE,
     SECTION_ASSETS,
     SECTION_DECISIONS,
     SECTION_OVERVIEW,
@@ -246,8 +248,10 @@ class CLIFlowTests(unittest.TestCase):
             self.assertFalse(result.offline)
             self.assertGreater(result.claim_count, 0)
             self.assertGreater(result.ai_pending_count, 0)
+            self.assertEqual(result.asset_count, 1)
 
             record = runner.cmd_review_show(db, result.draft_id)
+            self.assertEqual(record.draft.generation_mode, GENERATION_MODE_AI)
             timeline_claims = [
                 item.claim
                 for item in record.stored_claims
@@ -268,6 +272,29 @@ class CLIFlowTests(unittest.TestCase):
             self.assertEqual(len(asset_claims), 1)
             self.assertIn("登录态校验函数", asset_claims[0].text)
             self.assertEqual(asset_claims[0].status, ClaimStatus.AI_PENDING)
+
+    def test_offline_generate_has_no_asset_candidates(self) -> None:
+        with DevLogDB(self.db_path) as db:
+            runner.cmd_init(db, self.repo)
+            runner.cmd_scan(db, self.repo)
+
+            result = runner.cmd_review_generate(db, self.repo, offline=True)
+
+            # 离线模式只做规则摘要，可复用资产归纳需要 AI，所以恒为 0。
+            self.assertEqual(result.asset_count, 0)
+            self.assertTrue(result.offline)
+
+            record = runner.cmd_review_show(db, result.draft_id)
+            self.assertEqual(
+                record.draft.generation_mode, GENERATION_MODE_OFFLINE
+            )
+            self.assertFalse(
+                [
+                    item.claim
+                    for item in record.stored_claims
+                    if item.claim.section == SECTION_ASSETS
+                ]
+            )
 
     def test_init_rejects_non_git_directory(self) -> None:
         plain = self.root / "plain"

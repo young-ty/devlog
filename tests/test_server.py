@@ -180,6 +180,8 @@ class APIFlowTests(unittest.TestCase):
             self.assertEqual(generated["offline"], True)
             self.assertEqual(generated["claim_count"], 2)
             self.assertEqual(generated["ai_pending_count"], 0)
+            # 离线模式不调用 AI，可复用资产候选数必须是 0。
+            self.assertEqual(generated["asset_count"], 0)
 
             response = client.get(f"/api/projects/{project_id}/reviews")
             self.assertEqual(response.status_code, 200)
@@ -191,6 +193,7 @@ class APIFlowTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             draft = response.json()
             self.assertEqual(len(draft["claims"]), 2)
+            self.assertEqual(draft["generation_mode"], "offline")
             self.assertTrue(
                 all(claim["status"] == "fact" for claim in draft["claims"])
             )

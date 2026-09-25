@@ -254,13 +254,19 @@ def main(argv: list[str] | None = None) -> int:
                         offline=args.offline,
                     )
                     mode = "（离线：规则摘要，未调用 AI）" if args.offline else ""
+                    assets = (
+                        f"，可复用资产候选 {result.asset_count} 个"
+                        if not args.offline
+                        else ""
+                    )
                     print(
                         f"已生成草稿 #{result.draft_id}：{result.project_name} "
                         f"{_fmt_day(result.range_start)} ~ "
                         f"{_fmt_day(result.range_end)}，"
                         f"论断 {result.claim_count} 条"
                         f"（AI 待确认 {result.ai_pending_count}），"
-                        f"引导问题 {result.question_count} 个 {mode}"
+                        f"引导问题 {result.question_count} 个"
+                        f"{assets} {mode}"
                     )
                 elif args.review_command == "list":
                     if args.draft is not None:

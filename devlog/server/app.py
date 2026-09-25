@@ -268,6 +268,7 @@ def create_app(
             range_start=draft.range_start,
             range_end=draft.range_end,
             generated_at=draft.generated_at,
+            generation_mode=draft.generation_mode,
             exported_path=record.exported_path,
             questions=[
                 schemas.ReviewQuestionResponse(

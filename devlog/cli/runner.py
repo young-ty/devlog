@@ -32,7 +32,12 @@ from devlog.core.llm.themes import (
 from devlog.core.llm.translation import translate_commit_subjects
 from devlog.core.review.engine import build_review_draft
 from devlog.core.review.markdown import write_markdown
-from devlog.core.review.models import ClaimStatus, ReviewQuestion
+from devlog.core.review.models import (
+    GENERATION_MODE_AI,
+    GENERATION_MODE_OFFLINE,
+    ClaimStatus,
+    ReviewQuestion,
+)
 from devlog.core.storage.database import (
     DevLogDB,
     ReviewDraftSummary,
@@ -76,6 +81,8 @@ class GenerateResult:
     claim_count: int
     ai_pending_count: int
     question_count: int
+    # 本次归纳出的可复用资产候选数；离线模式恒为 0。
+    asset_count: int
     offline: bool
 
 
@@ -224,6 +231,7 @@ def cmd_review_generate(
 
     if offline:
         summaries = [rule_based_summary(theme) for theme in cluster.themes]
+        assets = []
         draft = build_review_draft(
             project_name=project_name,
             range_start=range_start,
@@ -234,6 +242,7 @@ def cmd_review_generate(
             silence_periods=cluster.silence_periods,
             factual_summaries=True,
             bug_records=bug_records,
+            generation_mode=GENERATION_MODE_OFFLINE,
         )
     else:
         client = DeepSeekClient()
@@ -256,6 +265,7 @@ def cmd_review_generate(
             factual_summaries=False,
             bug_records=bug_records,
             asset_summaries=assets,
+            generation_mode=GENERATION_MODE_AI,
         )
 
     draft_id = db.save_review_draft(project_id, draft)
@@ -271,6 +281,7 @@ def cmd_review_generate(
         claim_count=len(draft.claims),
         ai_pending_count=pending,
         question_count=len(draft.questions),
+        asset_count=len(assets),
         offline=offline,
     )
 

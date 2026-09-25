@@ -15,6 +15,8 @@ from pathlib import Path
 from devlog.core.capture.models import DailyNote
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.review.models import (
+    GENERATION_MODE_AI,
+    GENERATION_MODE_UNKNOWN,
     SECTION_DECISIONS,
     SECTION_OVERVIEW,
     SECTION_TIMELINE,
@@ -30,7 +32,7 @@ from devlog.core.storage.database import DatabaseError, DevLogDB
 TZ = timezone(timedelta(hours=8))
 # 故意写死而不是引用模块常量：schema 版本一变，这里就必须有人手动改一次，
 # 逼着作者回来看"新版本的表和迁移测试都补了吗"。
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def at(day: int) -> datetime:
@@ -53,18 +55,32 @@ def make_event(number: int, day: int, noise: NoiseType = NoiseType.NONE) -> Comm
     )
 
 
-def make_v1_database(path: Path) -> None:
-    """创建一个只知道 schema 版本 1 的数据库。"""
+def make_version_database(path: Path, version: int) -> None:
+    """创建一个停在指定 schema 版本的数据库。
+
+    逐版本执行建表语句（而不是直接用最新的表结构），这样测试跑的是
+    真实的迁移路径：老库长什么样、升级时补了什么。
+    """
 
     conn = database_module.sqlite3.connect(str(path))
-    for statement in database_module._SCHEMA_V1_STATEMENTS:
-        conn.execute(statement)
-    conn.execute("PRAGMA user_version = 1")
+    for current in range(1, version + 1):
+        statements = getattr(database_module, f"_SCHEMA_V{current}_STATEMENTS")
+        for statement in statements:
+            conn.execute(statement)
+    conn.execute(f"PRAGMA user_version = {version}")
     conn.commit()
     conn.close()
 
 
-def make_sample_draft() -> ReviewDraft:
+def make_v1_database(path: Path) -> None:
+    """创建一个只知道 schema 版本 1 的数据库。"""
+
+    make_version_database(path, 1)
+
+
+def make_sample_draft(
+    generation_mode: str = GENERATION_MODE_UNKNOWN,
+) -> ReviewDraft:
     return ReviewDraft(
         project_name="demo",
         range_start=at(1),
@@ -90,6 +106,7 @@ def make_sample_draft() -> ReviewDraft:
             ),
             ReviewQuestion(text="下一步计划是什么？"),
         ],
+        generation_mode=generation_mode,
     )
 
 
@@ -105,6 +122,56 @@ class DevLogDBTests(unittest.TestCase):
 
     def test_schema_version_is_created(self) -> None:
         self.assertEqual(self.db.schema_version, SCHEMA_VERSION)
+
+    def test_draft_generation_mode_round_trip(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(
+            project_id,
+            make_sample_draft(generation_mode=GENERATION_MODE_AI),
+        )
+
+        loaded = self.db.load_review_draft(draft_id)
+        self.assertEqual(loaded.draft.generation_mode, GENERATION_MODE_AI)
+
+    def test_v5_database_upgrades_and_marks_old_drafts_unknown(self) -> None:
+        v5_path = Path(self._tmp.name) / "v5.db"
+        make_version_database(v5_path, 5)
+
+        conn = database_module.sqlite3.connect(str(v5_path))
+        conn.execute(
+            "INSERT INTO projects (name, path, created_at) VALUES (?, ?, ?)",
+            (
+                "demo",
+                str(Path("D:/work/demo").resolve()),
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO review_drafts "
+            "(project_id, range_start, range_end, created_at, questions_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                1,
+                at(1).isoformat(),
+                at(3).isoformat(),
+                "2026-09-03T10:00:00+00:00",
+                '["旧格式问题"]',
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        upgraded = DevLogDB(v5_path)
+        try:
+            self.assertEqual(upgraded.schema_version, SCHEMA_VERSION)
+            record = upgraded.load_review_draft(1)
+            # 老草稿没有生成方式，读出来是 unknown，界面按中性文案处理。
+            self.assertEqual(
+                record.draft.generation_mode, GENERATION_MODE_UNKNOWN
+            )
+            self.assertEqual(record.draft.questions[0].text, "旧格式问题")
+        finally:
+            upgraded.close()
 
     def test_draft_answers_round_trip_and_overwrite(self) -> None:
         project_id = self.db.register_project("demo", "D:/work/demo")

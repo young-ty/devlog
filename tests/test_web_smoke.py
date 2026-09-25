@@ -126,6 +126,27 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("<textarea", page_text)
         self.assertIn("保存回答", page_text)
 
+    def test_asset_discoverability_bindings_exist(self) -> None:
+        """可复用资产归纳必须能在界面上被看出来跑没跑。"""
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        self.assertIn("asset_count", types_text)
+        self.assertIn("generation_mode", types_text)
+
+        project_text = (
+            WEB_DIR / "src" / "pages" / "ProjectPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("可复用资产候选", project_text)
+        self.assertIn("不会归纳资产", project_text)
+
+        review_text = (
+            WEB_DIR / "src" / "pages" / "ReviewPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("SECTION_ORDER", review_text)
+        self.assertIn("emptySectionHint", review_text)
+        self.assertIn("本次 AI 归纳没有找到", review_text)
+        self.assertIn("由旧版本生成", review_text)
+
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")
