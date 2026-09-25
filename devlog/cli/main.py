@@ -131,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--text", required=True, help="回答内容（回答会写进对应的板块）"
     )
 
+    delete_parser = review_sub.add_parser(
+        "delete", help="删除一份复盘草稿（旧格式草稿用这个清掉）"
+    )
+    delete_parser.add_argument("draft_id", type=int, help="草稿 ID")
+
     sub.add_parser(
         "doctor",
         help="自检：前端产物、Git、数据库与大模型配置是否就绪",
@@ -186,12 +191,15 @@ def _fmt_day(when: datetime) -> str:
 
 
 def _print_summary_line(summary) -> None:
+    # 旧格式草稿（本次改动之前生成的）里没有资产归纳，单独标一下，
+    # 免得用户以为新功能又没生效。
+    mode = "  [旧版本草稿]" if summary.generation_mode == "unknown" else ""
     print(
         f"#{summary.draft_id}  {summary.project_name} | "
         f"{_fmt_day(summary.range_start)} ~ {_fmt_day(summary.range_end)} | "
         f"论断 {summary.total_claims} 条"
         f"（AI 待确认 {summary.ai_pending_claims}，"
-        f"已确认 {summary.confirmed_claims}）"
+        f"已确认 {summary.confirmed_claims}）{mode}"
     )
 
 
@@ -319,6 +327,11 @@ def main(argv: list[str] | None = None) -> int:
                         f"已保存第 {args.number} 个问题的回答"
                         f"（对应板块：{question.section or '未指定'}）"
                     )
+                elif args.review_command == "delete":
+                    if runner.cmd_review_delete(db, args.draft_id):
+                        print(f"已删除草稿 #{args.draft_id}。")
+                    else:
+                        print(f"没找到草稿 #{args.draft_id}，未做任何改动。")
         return 0
     except (
         runner.CLIUsageError,

@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -347,6 +347,16 @@ def create_app(
             output=payload.output,
         )
         return schemas.ExportResponse(path=str(target))
+
+    @app.delete("/api/reviews/{draft_id}")
+    def delete_review(draft_id: int, db=Depends(get_db)):
+        """删除草稿。不存在返回 404，避免前端把"没删掉"当成成功。"""
+
+        if not runner.cmd_review_delete(db, draft_id):
+            raise HTTPException(
+                status_code=404, detail=f"草稿不存在：{draft_id}"
+            )
+        return {"deleted": True}
 
     # ------------------------------------------------------------------
     # 记忆层：每日笔记

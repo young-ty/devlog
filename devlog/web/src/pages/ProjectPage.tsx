@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  deleteReview,
   generateReview,
   getLLMConfig,
   listReviews,
@@ -124,6 +125,30 @@ export function ProjectPage({
         `已生成 AI 草稿 #${result.draft_id}（中文摘要）：${result.claim_count} 条论断、${result.question_count} 个引导问题、可复用资产候选 ${result.asset_count} 个`,
       );
       setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteReview(draftId: number) {
+    if (
+      !window.confirm(
+        `确定删除草稿 #${draftId} 吗？它的论断和已填写的回答会一起删掉，无法恢复。`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      await deleteReview(draftId);
+      setReviews((current) =>
+        current.filter((review) => review.draft_id !== draftId),
+      );
+      setSuccess(`已删除草稿 #${draftId}`);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -277,15 +302,28 @@ export function ProjectPage({
                   (review.confirmed_claims / review.total_claims) * 100,
                 );
           return (
-            <button
+            // 外层用 div 而不是 button：卡片里还要放一个真按钮（删除），
+            // 按钮套按钮是非法 HTML，浏览器行为也不可预期。
+            <div
               key={review.draft_id}
               className="item-card"
+              role="button"
+              tabIndex={0}
               onClick={() => onOpenReview(review.draft_id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenReview(review.draft_id);
+                }
+              }}
             >
               <div className="item-top">
                 <div>
                   <div className="item-title">
                     草稿 #{review.draft_id}
+                    {review.generation_mode === "unknown" && (
+                      <span className="badge badge-legacy">旧版本</span>
+                    )}
                     {review.ai_pending_claims === 0 && (
                       <span className="badge badge-confirmed">已处理完</span>
                     )}
@@ -297,7 +335,20 @@ export function ProjectPage({
                     )}
                   </div>
                 </div>
-                <span className="arrow">→</span>
+                <div className="item-actions">
+                  <span className="arrow">→</span>
+                  <button
+                    className="item-delete"
+                    disabled={busy}
+                    onClick={(event) => {
+                      // 别让删除按钮的点击冒泡成"打开草稿"。
+                      event.stopPropagation();
+                      void handleDeleteReview(review.draft_id);
+                    }}
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
               <div className="item-meta">
                 <span>论断 {review.total_claims}</span>
@@ -311,7 +362,7 @@ export function ProjectPage({
                   style={{ width: `${confirmedRatio}%` }}
                 />
               </div>
-            </button>
+            </div>
           );
         })}
       </section>

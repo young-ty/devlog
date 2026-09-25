@@ -142,6 +142,15 @@ export function getReviewDraft(draftId: number): Promise<ReviewDraft> {
   return request<ReviewDraft>(`/api/reviews/${draftId}`);
 }
 
+export function deleteReview(
+  draftId: number,
+): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(
+    `/api/reviews/${draftId}`,
+    jsonInit("DELETE"),
+  );
+}
+
 export function confirmClaims(
   draftId: number,
   options: { claimIds?: number[]; all?: boolean; note?: string },

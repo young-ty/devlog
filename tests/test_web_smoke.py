@@ -147,6 +147,18 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("本次 AI 归纳没有找到", review_text)
         self.assertIn("由旧版本生成", review_text)
 
+    def test_review_delete_bindings_exist(self) -> None:
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function deleteReview(", api_text)
+
+        project_text = (
+            WEB_DIR / "src" / "pages" / "ProjectPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("deleteReview", project_text)
+        self.assertIn("handleDeleteReview", project_text)
+        self.assertIn("旧版本", project_text)
+        self.assertIn("window.confirm", project_text)
+
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")

@@ -304,6 +304,60 @@ class CLIFlowTests(unittest.TestCase):
             code = cli_main(["--db", str(self.db_path), "init", str(plain)])
         self.assertEqual(code, 1)
 
+    def test_review_delete_removes_draft_and_reports_missing(self) -> None:
+        with DevLogDB(self.db_path) as db:
+            runner.cmd_init(db, self.repo)
+            runner.cmd_scan(db, self.repo)
+            first = runner.cmd_review_generate(
+                db, self.repo, offline=True
+            ).draft_id
+            second = runner.cmd_review_generate(
+                db, self.repo, offline=True
+            ).draft_id
+
+            self.assertTrue(runner.cmd_review_delete(db, first))
+            self.assertEqual(
+                [item.draft_id for item in runner.cmd_review_list(db, self.repo)],
+                [second],
+            )
+            # 已经不存在时返回 False，而不是抛异常。
+            self.assertFalse(runner.cmd_review_delete(db, first))
+
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            code = cli_main(
+                ["--db", str(self.db_path), "review", "delete", str(second)]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("已删除草稿", sink.getvalue())
+
+    def test_review_list_marks_legacy_drafts(self) -> None:
+        """旧格式草稿在列表里要能被认出来，否则用户会以为新功能没生效。"""
+
+        with DevLogDB(self.db_path) as db:
+            project_id = runner.cmd_init(db, self.repo).project_id
+            db.save_review_draft(
+                project_id,
+                ReviewDraft(
+                    project_name="demo",
+                    range_start=at(1),
+                    range_end=at(2),
+                    claims=[
+                        ReviewClaim(
+                            section=SECTION_OVERVIEW,
+                            text="共 1 次有效提交。",
+                            status=ClaimStatus.FACT,
+                        )
+                    ],
+                ),
+            )
+
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            code = cli_main(["--db", str(self.db_path), "review", "list"])
+        self.assertEqual(code, 0)
+        self.assertIn("旧版本草稿", sink.getvalue())
+
 
 class CLIReviewConfirmTests(unittest.TestCase):
     def setUp(self) -> None:

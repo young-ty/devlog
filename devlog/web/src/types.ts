@@ -113,6 +113,8 @@ export interface ReviewSummary {
   total_claims: number;
   ai_pending_claims: number;
   confirmed_claims: number;
+  /** ai / offline / unknown：unknown 是旧版本生成的草稿。 */
+  generation_mode: string;
 }
 
 export interface ReviewClaim {

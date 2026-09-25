@@ -215,6 +215,39 @@ class APIFlowTests(unittest.TestCase):
             self.assertTrue(export_path.exists())
             self.assertEqual(export_path.parent.name, "retrospectives")
 
+    def test_review_draft_can_be_deleted(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = client.post(
+                "/api/projects",
+                json={"path": str(self.repo), "name": "demo-api"},
+            ).json()["project_id"]
+            client.post(f"/api/projects/{project_id}/scan", json={})
+            draft_id = client.post(
+                f"/api/projects/{project_id}/reviews/generate",
+                json={"offline": True},
+            ).json()["draft_id"]
+
+            summaries = client.get(
+                f"/api/projects/{project_id}/reviews"
+            ).json()
+            self.assertEqual(len(summaries), 1)
+            self.assertEqual(summaries[0]["generation_mode"], "offline")
+
+            response = client.delete(f"/api/reviews/{draft_id}")
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()["deleted"])
+
+            self.assertEqual(
+                client.get(f"/api/projects/{project_id}/reviews").json(), []
+            )
+            self.assertEqual(
+                client.get(f"/api/reviews/{draft_id}").status_code, 404
+            )
+
+            # 重复删除要给出 404，而不是假装成功或抛 500。
+            repeat = client.delete(f"/api/reviews/{draft_id}")
+            self.assertEqual(repeat.status_code, 404)
+
     def test_missing_resources_return_404(self) -> None:
         with TestClient(self.app) as client:
             response = client.get("/api/projects/999/reviews")

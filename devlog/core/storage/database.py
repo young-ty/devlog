@@ -264,6 +264,8 @@ class ReviewDraftSummary:
     total_claims: int
     ai_pending_claims: int
     confirmed_claims: int
+    # ai / offline / unknown：列表里要能一眼看出哪份是旧版本生成的。
+    generation_mode: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -843,7 +845,21 @@ class DevLogDB:
             total_claims=len(record.draft.claims),
             ai_pending_claims=pending,
             confirmed_claims=confirmed,
+            generation_mode=record.draft.generation_mode,
         )
+
+    def delete_review_draft(self, draft_id: int) -> bool:
+        """删除一份草稿及其论断与回答；存在时返回 True。
+
+        论断（review_claims）和回答（draft_answers）都靠外键
+        ON DELETE CASCADE 跟着删，不需要在这里手动清表。
+        """
+
+        cursor = self._conn.execute(
+            "DELETE FROM review_drafts WHERE id = ?", (draft_id,)
+        )
+        self._conn.commit()
+        return cursor.rowcount == 1
 
     # ------------------------------------------------------------------
     # 每日笔记（记忆层）

@@ -230,6 +230,42 @@ button.item-card:focus-visible {
   outline: none;
 }
 
+/* 草稿卡片改成了 div[role=button]（里面要放删除按钮），
+   所以 hover / focus 样式不能只挂在 button 上。 */
+div.item-card:hover,
+div.item-card:focus-visible {
+  border-color: var(--accent-strong);
+  background: var(--panel-hover);
+  outline: none;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.item-delete {
+  font-size: 12.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.item-delete:hover:not(:disabled) {
+  border-color: #f85149;
+  color: #f85149;
+}
+
+.item-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .item-top {
   display: flex;
   align-items: flex-start;
@@ -541,6 +577,13 @@ button.secondary:hover:not(:disabled) {
   background: rgba(139, 148, 158, 0.16);
   color: var(--text-secondary);
   border: 1px solid var(--border-strong);
+}
+
+/* 旧版本生成的草稿：没有可复用资产归纳，用中性灰标出来 */
+.badge-legacy {
+  background: rgba(139, 148, 158, 0.16);
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-strong);
 }
 
 .badge-open {

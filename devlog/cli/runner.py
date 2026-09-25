@@ -459,6 +459,16 @@ def cmd_review_export(
     return written
 
 
+def cmd_review_delete(db: DevLogDB, draft_id: int) -> bool:
+    """删除一份草稿；不存在时返回 False 而不是抛错。
+
+    返回布尔值而不是抛异常，是为了让 DELETE 接口能自然地返回 404，
+    也让"并发重复删除"不会变成一个 500。
+    """
+
+    return db.delete_review_draft(draft_id)
+
+
 # ----------------------------------------------------------------------
 # 记忆层：每日笔记 / Bug 捕获 / commit 批注
 # ----------------------------------------------------------------------

@@ -133,6 +133,44 @@ class DevLogDBTests(unittest.TestCase):
         loaded = self.db.load_review_draft(draft_id)
         self.assertEqual(loaded.draft.generation_mode, GENERATION_MODE_AI)
 
+    def test_draft_summary_reports_generation_mode(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        self.db.save_review_draft(
+            project_id,
+            make_sample_draft(generation_mode=GENERATION_MODE_AI),
+        )
+
+        summary = self.db.list_review_drafts(project_id)[0]
+
+        self.assertEqual(summary.generation_mode, GENERATION_MODE_AI)
+
+    def test_delete_review_draft_cascades_claims_and_answers(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+        self.db.save_draft_answer(draft_id, 1, "选 SQLite 是为了零部署。")
+
+        self.assertTrue(self.db.delete_review_draft(draft_id))
+
+        # 论断和回答靠外键 ON DELETE CASCADE 一起清理，不能留孤儿行。
+        self.assertEqual(
+            self.db._conn.execute(
+                "SELECT COUNT(*) FROM review_claims WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()[0],
+            0,
+        )
+        self.assertEqual(
+            self.db._conn.execute(
+                "SELECT COUNT(*) FROM draft_answers WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()[0],
+            0,
+        )
+        self.assertEqual(self.db.list_review_drafts(project_id), [])
+
+    def test_delete_missing_review_draft_returns_false(self) -> None:
+        self.assertFalse(self.db.delete_review_draft(9999))
+
     def test_v5_database_upgrades_and_marks_old_drafts_unknown(self) -> None:
         v5_path = Path(self._tmp.name) / "v5.db"
         make_version_database(v5_path, 5)

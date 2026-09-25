@@ -88,6 +88,8 @@ class ReviewSummaryResponse(_FromAttributes):
     total_claims: int
     ai_pending_claims: int
     confirmed_claims: int
+    # ai / offline / unknown：列表里要能标出旧版本生成的草稿。
+    generation_mode: str = "unknown"
 
 
 class ReviewClaimResponse(BaseModel):
