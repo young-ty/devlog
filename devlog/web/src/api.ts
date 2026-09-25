@@ -22,6 +22,7 @@ import type {
   ScanResult,
   SuggestTitleInput,
   SuggestTitleResult,
+  TimelineStream,
   TranslationResult,
 } from "./types";
 
@@ -113,6 +114,15 @@ export function getProjectTimeline(
 
 export function getLLMConfig(): Promise<LLMConfig> {
   return request<LLMConfig>("/api/llm/config");
+}
+
+/** 拉取合并好的时间线事件流（提交、Bug、笔记、批注、里程碑、空档）。 */
+export function getProjectTimelineEvents(
+  projectId: number,
+): Promise<TimelineStream> {
+  return request<TimelineStream>(
+    `/api/projects/${projectId}/timeline-events`,
+  );
 }
 
 export function translateProjectCommits(

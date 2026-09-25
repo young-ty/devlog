@@ -23,6 +23,7 @@ from devlog.core.llm.deepseek import llm_settings
 from devlog.core.llm.base import LLMError
 from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError, default_db_path
+from devlog.core.timeline.events import DEFAULT_EVENT_LIMIT
 from devlog.server import desktop, schemas
 
 
@@ -204,6 +205,21 @@ def create_app(
     def project_timeline(project_id: int, db=Depends(get_db)):
         return schemas.TimelineResponse.from_result(
             runner.cmd_timeline(db, project_id)
+        )
+
+    @app.get(
+        "/api/projects/{project_id}/timeline-events",
+        response_model=schemas.TimelineEventsResponse,
+    )
+    def project_timeline_events(
+        project_id: int,
+        limit: int | None = DEFAULT_EVENT_LIMIT,
+        db=Depends(get_db),
+    ):
+        """合并提交、Bug、笔记、批注、里程碑与空档，返回排好序的事件流。"""
+
+        return schemas.TimelineEventsResponse.from_result(
+            runner.cmd_timeline_events(db, project_id, limit=limit)
         )
 
     @app.post(

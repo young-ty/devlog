@@ -238,3 +238,41 @@ export interface AnnotationUpdateInput {
   kind?: AnnotationKind;
   body?: string;
 }
+
+/** 时间线节点承载的是哪一类事实。 */
+export type TimelineEventKind =
+  | "commit"
+  | "bug"
+  | "note"
+  | "annotation"
+  | "milestone"
+  | "gap";
+
+/** 时间线上的一个节点。payload 字段按 kind 取用。
+ *
+ * 后端把六种来源合并成同一种形状，是为了让前端只写一套排版逻辑；
+ * 代价是每种事件只能读自己那一格，读错格子会拿到 null。
+ */
+export interface TimelineEvent {
+  kind: TimelineEventKind;
+  at: string;
+  key: string;
+  commit: TimelineCommit | null;
+  bug: BugRecord | null;
+  note: DailyNote | null;
+  annotation: CommitAnnotation | null;
+  theme: TimelineTheme | null;
+  gap: TimelineSilencePeriod | null;
+}
+
+export interface TimelineStream {
+  project_id: number;
+  project_name: string;
+  project_path: string;
+  total_count: number;
+  /** 因为超过上限而没有画到时间线上的更早事件数量。 */
+  truncated_count: number;
+  /** 原 commit 已不在历史中的批注数量；这些批注不进时间线。 */
+  orphan_annotation_count: number;
+  events: TimelineEvent[];
+}

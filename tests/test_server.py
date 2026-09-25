@@ -551,5 +551,149 @@ class MemoryAPITests(unittest.TestCase):
             self.assertEqual(orphan_list[0]["body"], "这条会变成孤儿")
 
 
+class TimelineEventsAPITests(unittest.TestCase):
+    """时间线事件流接口：把四类来源合并成一条排好序的事件流。"""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root)
+        self.db_path = Path(self.root) / "events.db"
+        commit(self.repo, "login.py", "def login(): ...\n", "feat: add login page", at(1))
+        commit(self.repo, "login.py", "def login(): return True\n", "fix: login button", at(2))
+        commit(self.repo, "pay.py", "def pay(): ...\n", "feat: add payment page", at(9))
+        self.app = create_app(self.db_path)
+
+    def tearDown(self) -> None:
+        force_remove(self.root)
+
+    def prepare(self, client) -> int:
+        project_id = client.post(
+            "/api/projects", json={"path": str(self.repo)}
+        ).json()["project_id"]
+        client.post(f"/api/projects/{project_id}/scan", json={})
+        return project_id
+
+    def test_events_merge_every_source_in_time_order(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self.prepare(client)
+            timeline = client.get(f"/api/projects/{project_id}/timeline").json()
+            first_hash = timeline["commits"][0]["hash"]
+
+            client.post(
+                f"/api/projects/{project_id}/commits/{first_hash}/annotations",
+                json={"kind": "note", "body": "这里的重试逻辑踩过坑"},
+            )
+            client.post(
+                f"/api/projects/{project_id}/bugs",
+                json={
+                    "title": "打包后首次启动闪退",
+                    "error_text": "ModuleNotFoundError: no module named templates",
+                },
+            )
+            client.post(
+                f"/api/projects/{project_id}/notes",
+                json={
+                    "note_date": "2026-09-05",
+                    "summary": "今天在调打包",
+                    "issues": "",
+                    "plan": "",
+                },
+            )
+
+            response = client.get(
+                f"/api/projects/{project_id}/timeline-events"
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+
+            kinds = [item["kind"] for item in payload["events"]]
+            self.assertEqual(kinds.count("commit"), 3)
+            self.assertEqual(kinds.count("annotation"), 1)
+            self.assertEqual(kinds.count("bug"), 1)
+            self.assertEqual(kinds.count("note"), 1)
+            self.assertEqual(kinds.count("gap"), 1)
+            self.assertEqual(payload["total_count"], len(payload["events"]))
+            self.assertEqual(payload["truncated_count"], 0)
+            self.assertEqual(payload["orphan_annotation_count"], 0)
+
+            moments = [item["at"] for item in payload["events"]]
+            self.assertEqual(moments, sorted(moments))
+
+            # 批注锚定在它评论的那次提交上，而不是写批注的时刻。
+            annotation = next(
+                item for item in payload["events"] if item["kind"] == "annotation"
+            )
+            anchored = next(
+                item
+                for item in payload["events"]
+                if item["kind"] == "commit"
+                and item["commit"]["hash"] == first_hash
+            )
+            self.assertEqual(annotation["at"], anchored["at"])
+            self.assertEqual(annotation["annotation"]["commit_hash"], first_hash)
+            self.assertIsNone(annotation["commit"])
+
+            # 空档紧跟在停止提交的那一条后面，而不是散在别处。
+            second_commit_index = [
+                index
+                for index, item in enumerate(payload["events"])
+                if item["kind"] == "commit"
+            ][1]
+            self.assertEqual(
+                payload["events"][second_commit_index + 1]["kind"], "gap"
+            )
+            gap = payload["events"][second_commit_index + 1]["gap"]
+            self.assertGreaterEqual(gap["days"], 3)
+
+    def test_events_limit_keeps_the_most_recent_and_reports_truncation(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self.prepare(client)
+            full = client.get(
+                f"/api/projects/{project_id}/timeline-events"
+            ).json()
+
+            limited = client.get(
+                f"/api/projects/{project_id}/timeline-events",
+                params={"limit": 2},
+            ).json()
+
+            self.assertEqual(len(limited["events"]), 2)
+            self.assertEqual(limited["total_count"], full["total_count"])
+            self.assertEqual(
+                limited["truncated_count"], full["total_count"] - 2
+            )
+            self.assertEqual(
+                [item["key"] for item in limited["events"]],
+                [item["key"] for item in full["events"][-2:]],
+            )
+
+    def test_events_carry_translated_subjects(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self.prepare(client)
+            timeline = client.get(f"/api/projects/{project_id}/timeline").json()
+            first_hash = timeline["commits"][0]["hash"]
+
+            db = DevLogDB(self.db_path)
+            try:
+                db.save_commit_translations(project_id, {first_hash: "新增登录页面"})
+            finally:
+                db.close()
+
+            payload = client.get(
+                f"/api/projects/{project_id}/timeline-events"
+            ).json()
+            translated = next(
+                item["commit"]["translated_subject"]
+                for item in payload["events"]
+                if item["kind"] == "commit" and item["commit"]["hash"] == first_hash
+            )
+            self.assertEqual(translated, "新增登录页面")
+
+    def test_events_for_unknown_project_returns_404(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.get("/api/projects/999/timeline-events")
+            self.assertEqual(response.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

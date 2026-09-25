@@ -4,14 +4,19 @@ import {
   deleteAnnotation,
   getLLMConfig,
   getProjectTimeline,
+  getProjectTimelineEvents,
   listAnnotations,
   translateProjectCommits,
 } from "../api";
+import { AnnotationPanel } from "../components/AnnotationPanel";
+import { Icon } from "../components/Icons";
+import { TimelineRail } from "../components/TimelineRail";
 import type {
   AnnotationKind,
   CommitAnnotation,
   ProjectTimeline,
   TimelineCommit,
+  TimelineStream,
   TimelineTheme,
 } from "../types";
 import { formatDateTime, formatRange } from "../utils";
@@ -64,7 +69,6 @@ export function TimelinePage({
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showNoise, setShowNoise] = useState(false);
   const [llmReady, setLLMReady] = useState<boolean | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -73,9 +77,8 @@ export function TimelinePage({
   >({});
   const [orphans, setOrphans] = useState<CommitAnnotation[]>([]);
   const [openHash, setOpenHash] = useState<string | null>(null);
-  const [draftKind, setDraftKind] = useState<AnnotationKind>("note");
-  const [draftBody, setDraftBody] = useState("");
   const [annotationBusy, setAnnotationBusy] = useState(false);
+  const [stream, setStream] = useState<TimelineStream | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +154,27 @@ export function TimelinePage({
     };
   }, [projectId]);
 
+  // 时间线事件流由后端把提交、Bug、笔记、批注合并好再返回。任何一处
+  // 改动（例如新加一条批注）都要重新拉一次，因为批注本身也是时间线上
+  // 的一个节点，只改本地数组的话那个节点不会出现。
+  useEffect(() => {
+    let cancelled = false;
+    getProjectTimelineEvents(projectId)
+      .then((data) => {
+        if (!cancelled) {
+          setStream(data);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, reloadKey]);
+
   async function handleTranslate() {
     setTranslating(true);
     setError("");
@@ -177,18 +201,16 @@ export function TimelinePage({
   }
 
   function toggleCommitAnnotations(hash: string) {
-    if (openHash === hash) {
-      setOpenHash(null);
-      return;
-    }
-    setOpenHash(hash);
-    setDraftKind("note");
-    setDraftBody("");
+    setOpenHash((current) => (current === hash ? null : hash));
   }
 
-  async function handleAddAnnotation(commitHash: string) {
-    const body = draftBody.trim();
-    if (!body) {
+  async function handleAddAnnotation(
+    commitHash: string,
+    kind: AnnotationKind,
+    body: string,
+  ) {
+    const trimmed = body.trim();
+    if (!trimmed) {
       setError("请先填写批注内容");
       return;
     }
@@ -197,15 +219,16 @@ export function TimelinePage({
     setSuccess("");
     try {
       const created = await addAnnotation(projectId, commitHash, {
-        kind: draftKind,
-        body,
+        kind,
+        body: trimmed,
       });
       setAnnotations((prev) => ({
         ...prev,
         [commitHash]: [...(prev[commitHash] ?? []), created],
       }));
-      setDraftBody("");
       setSuccess("批注已添加");
+      // 批注本身也是时间线上的一个节点，得让事件流重新合并一次。
+      setReloadKey((key) => key + 1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -230,6 +253,7 @@ export function TimelinePage({
         ),
       }));
       setSuccess("批注已删除");
+      setReloadKey((key) => key + 1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -277,18 +301,12 @@ export function TimelinePage({
     );
   }
 
-  const noiseCount = timeline.commits.filter(
-    (item) => item.noise_type !== "none",
-  ).length;
   const milestoneCount = timeline.themes.filter(
     (theme) => theme.is_milestone_candidate,
   ).length;
   const translatedCount = timeline.commits.filter(
     (item) => item.translated_subject !== null,
   ).length;
-  const visibleCommits = timeline.commits.filter(
-    (item) => showNoise || item.noise_type === "none",
-  );
   const annotationCount = Object.values(annotations).reduce(
     (sum, items) => sum + items.length,
     0,
@@ -348,59 +366,13 @@ export function TimelinePage({
                 : "添加批注"}
           </button>
           {isOpen && (
-            <div className="annotation-panel">
-              {commitAnnotations.length > 0 ? (
-                <ul className="annotation-list">
-                  {commitAnnotations.map((item) => (
-                    <li key={item.id} className="annotation-item">
-                      <span
-                        className={
-                          item.kind === "decision"
-                            ? "badge badge-confirmed"
-                            : "badge badge-edited"
-                        }
-                      >
-                        {item.kind === "decision" ? "决策" : "备注"}
-                      </span>
-                      <span className="annotation-body">{item.body}</span>
-                      <button
-                        className="secondary danger tiny"
-                        disabled={annotationBusy}
-                        onClick={() => handleDeleteAnnotation(item)}
-                      >
-                        删除
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="panel-hint">
-                  还没有批注，记下当时的想法、踩的坑或做出的决定。
-                </p>
-              )}
-              <div className="annotation-form">
-                <select
-                  value={draftKind}
-                  onChange={(event) =>
-                    setDraftKind(event.target.value as AnnotationKind)
-                  }
-                >
-                  <option value="note">备注</option>
-                  <option value="decision">决策</option>
-                </select>
-                <input
-                  placeholder="例如：这里的重试逻辑踩过坑 / 选 SQLite 因为零配置"
-                  value={draftBody}
-                  onChange={(event) => setDraftBody(event.target.value)}
-                />
-                <button
-                  disabled={annotationBusy}
-                  onClick={() => handleAddAnnotation(commit.hash)}
-                >
-                  添加批注
-                </button>
-              </div>
-            </div>
+            <AnnotationPanel
+              commitHash={commit.hash}
+              annotations={commitAnnotations}
+              busy={annotationBusy}
+              onAdd={handleAddAnnotation}
+              onDelete={handleDeleteAnnotation}
+            />
           )}
         </div>
       </div>
@@ -408,7 +380,6 @@ export function TimelinePage({
   }
 
   const themes = [...timeline.themes].reverse();
-  const commits = [...visibleCommits].reverse();
 
   return (
     <main className="container">
@@ -425,25 +396,40 @@ export function TimelinePage({
 
       <div className="stat-grid">
         <div className="stat-card">
-          <div className="stat-label">提交总数</div>
+          <div className="stat-label">
+            <Icon name="commit" className="stat-icon" />
+            提交总数
+          </div>
           <div className="stat-value">{timeline.commits.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">已翻译为中文</div>
+          <div className="stat-label">
+            <Icon name="note" className="stat-icon" />
+            已翻译为中文
+          </div>
           <div className="stat-value accent">{translatedCount}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">开发主题</div>
+          <div className="stat-label">
+            <Icon name="tag" className="stat-icon" />
+            开发主题
+          </div>
           <div className="stat-value">{timeline.themes.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">静默期</div>
+          <div className="stat-label">
+            <Icon name="gap" className="stat-icon" />
+            静默期
+          </div>
           <div className="stat-value warning">
             {timeline.silence_periods.length}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">批注</div>
+          <div className="stat-label">
+            <Icon name="annotation" className="stat-icon" />
+            批注
+          </div>
           <div className="stat-value">{annotationCount}</div>
         </div>
       </div>
@@ -600,29 +586,24 @@ export function TimelinePage({
             </section>
           )}
 
-          <section className="section">
-            <div className="panel-head">
-              <h2>提交流水</h2>
-              <span className="panel-hint">
-                {commits.length} 条{noiseCount > 0 && ` · ${noiseCount} 条噪音`}
-              </span>
-            </div>
-
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={showNoise}
-                onChange={(event) => setShowNoise(event.target.checked)}
-              />
-              显示噪音提交（merge / revert / wip / chore）
-            </label>
-
-            <div className="commit-list">
-              {commits.map((commit) =>
-                renderCommitRow(commit, commit.noise_type !== "none"),
-              )}
-            </div>
-          </section>
+          {stream ? (
+            <TimelineRail
+              events={stream.events}
+              truncatedCount={stream.truncated_count}
+              orphanAnnotationCount={stream.orphan_annotation_count}
+              annotations={annotations}
+              annotationBusy={annotationBusy}
+              onAddAnnotation={handleAddAnnotation}
+              onDeleteAnnotation={handleDeleteAnnotation}
+            />
+          ) : (
+            <section className="panel">
+              <div className="panel-head">
+                <h2>开发时间线</h2>
+                <span className="panel-hint">正在合并事件流…</span>
+              </div>
+            </section>
+          )}
         </>
       )}
     </main>

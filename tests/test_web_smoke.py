@@ -92,6 +92,51 @@ class WebSmokeTests(unittest.TestCase):
                 f"timeline page missing annotation call: {function_name}",
             )
 
+    def test_timeline_stream_bindings_exist(self) -> None:
+        """横向时间线要能同时表现提交、Bug、笔记、批注、空档。"""
+
+        for relative in (
+            "src/components/Icons.tsx",
+            "src/components/AnnotationPanel.tsx",
+            "src/components/TimelineEventCard.tsx",
+            "src/components/TimelineRail.tsx",
+            "src/hooks/useDragPan.ts",
+        ):
+            self.assertTrue(
+                (WEB_DIR / relative).exists(),
+                f"missing timeline source: {relative}",
+            )
+
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function getProjectTimelineEvents(", api_text)
+        self.assertIn("/timeline-events", api_text)
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        for type_name in ("TimelineEventKind", "TimelineEvent", "TimelineStream"):
+            self.assertIn(type_name, types_text, f"missing type: {type_name}")
+
+        rail_text = (
+            WEB_DIR / "src" / "components" / "TimelineRail.tsx"
+        ).read_text(encoding="utf-8")
+        # 拖动、缩略导航、筛选是"好翻看"的三根支柱，缺一个页面就退化了。
+        self.assertIn("useDragPan", rail_text)
+        self.assertIn("tl-mm-track", rail_text)
+        self.assertIn("tl-chip", rail_text)
+        # 筛选项要带数量：切到"本项目一条都没有"的类型时，卡片会全部变淡，
+        # 没有数字用户会以为界面坏了。
+        self.assertIn("tl-chip-count", rail_text)
+        self.assertIn("kindCounts", rail_text)
+
+        styles_text = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".tl-chip-count", styles_text)
+        self.assertIn(".tl-chip-empty", styles_text)
+
+        page_text = (
+            WEB_DIR / "src" / "pages" / "TimelinePage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("TimelineRail", page_text)
+        self.assertIn("getProjectTimelineEvents", page_text)
+
     def test_directory_picker_bindings_exist(self) -> None:
         api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
         self.assertIn("export function pickDirectory(", api_text)

@@ -168,11 +168,32 @@ class TimelineThemeResponse(BaseModel):
     commit_count: int
     is_milestone_candidate: bool
 
+    @classmethod
+    def from_theme(cls, theme) -> "TimelineThemeResponse":
+        return cls(
+            id=theme.id,
+            title=theme.title,
+            kind=theme.kind,
+            commit_hashes=list(theme.commit_hashes),
+            started_at=theme.started_at,
+            ended_at=theme.ended_at,
+            commit_count=theme.commit_count,
+            is_milestone_candidate=theme.is_milestone_candidate,
+        )
+
 
 class TimelineSilenceResponse(BaseModel):
     started_at: datetime
     ended_at: datetime
     days: int
+
+    @classmethod
+    def from_period(cls, period) -> "TimelineSilenceResponse":
+        return cls(
+            started_at=period.started_at,
+            ended_at=period.ended_at,
+            days=period.days,
+        )
 
 
 class TimelineResponse(BaseModel):
@@ -204,24 +225,11 @@ class TimelineResponse(BaseModel):
                 for event in result.commits
             ],
             themes=[
-                TimelineThemeResponse(
-                    id=theme.id,
-                    title=theme.title,
-                    kind=theme.kind,
-                    commit_hashes=list(theme.commit_hashes),
-                    started_at=theme.started_at,
-                    ended_at=theme.ended_at,
-                    commit_count=theme.commit_count,
-                    is_milestone_candidate=theme.is_milestone_candidate,
-                )
+                TimelineThemeResponse.from_theme(theme)
                 for theme in result.themes
             ],
             silence_periods=[
-                TimelineSilenceResponse(
-                    started_at=period.started_at,
-                    ended_at=period.ended_at,
-                    days=period.days,
-                )
+                TimelineSilenceResponse.from_period(period)
                 for period in result.silence_periods
             ],
         )
@@ -379,4 +387,91 @@ class AnnotationResponse(BaseModel):
             body=annotation.body,
             created_at=stored.created_at,
             updated_at=stored.updated_at,
+        )
+
+
+class TimelineEventResponse(BaseModel):
+    """时间线上的一个节点。payload 字段按 kind 取用。
+
+    前端拿到之后先看 kind，再决定读哪个字段 —— 提交有 hash、Bug 有
+    状态、笔记只有日期，用一个可选字段组装下比六种子类型更容易渲染。
+    """
+
+    kind: str
+    at: datetime
+    key: str
+    commit: TimelineCommitResponse | None = None
+    bug: BugResponse | None = None
+    note: DailyNoteResponse | None = None
+    annotation: AnnotationResponse | None = None
+    theme: TimelineThemeResponse | None = None
+    gap: TimelineSilenceResponse | None = None
+
+    @classmethod
+    def from_event(cls, event, translations) -> "TimelineEventResponse":
+        return cls(
+            kind=event.kind.value,
+            at=event.at,
+            key=event.key,
+            commit=(
+                TimelineCommitResponse(
+                    **event.commit.to_dict(),
+                    translated_subject=translations.get(event.commit.hash),
+                )
+                if event.commit is not None
+                else None
+            ),
+            bug=(
+                BugResponse.from_stored(event.bug)
+                if event.bug is not None
+                else None
+            ),
+            note=(
+                DailyNoteResponse.from_stored(event.note)
+                if event.note is not None
+                else None
+            ),
+            annotation=(
+                AnnotationResponse.from_stored(event.annotation)
+                if event.annotation is not None
+                else None
+            ),
+            theme=(
+                TimelineThemeResponse.from_theme(event.theme)
+                if event.theme is not None
+                else None
+            ),
+            gap=(
+                TimelineSilenceResponse.from_period(event.gap)
+                if event.gap is not None
+                else None
+            ),
+        )
+
+
+class TimelineEventsResponse(BaseModel):
+    """合并后的时间线事件流。"""
+
+    project_id: int
+    project_name: str
+    project_path: str
+    total_count: int
+    truncated_count: int
+    orphan_annotation_count: int
+    events: list[TimelineEventResponse] = Field(default_factory=list)
+
+    @classmethod
+    def from_result(cls, result) -> "TimelineEventsResponse":
+        translations = getattr(result, "translations", {})
+        return cls(
+            project_id=result.project_id,
+            project_name=result.project_name,
+            project_path=result.project_path,
+            total_count=result.total_count,
+            truncated_count=result.truncated_count,
+            orphan_annotation_count=result.orphan_annotation_count,
+            events=[
+                TimelineEventResponse.from_event(event, translations)
+                for event in result.events
+            ],
         )

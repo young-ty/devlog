@@ -1189,3 +1189,483 @@ button.tiny {
   color: var(--muted);
   align-self: center;
 }
+
+/* ---------- 图标 ---------- */
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+/* ---------- 横向曲线时间线 ---------- */
+
+.tl-panel {
+  overflow: hidden;
+}
+
+.tl-head {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.tl-chip:hover {
+  color: var(--text);
+}
+
+.tl-chip.on {
+  background: var(--accent-soft);
+  border-color: rgba(88, 166, 255, 0.55);
+  color: #9ecbff;
+}
+
+.tl-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+/* 数量为 0 的筛选项压暗：点进去只会看到满屏淡出，先在这里给出提示。 */
+.tl-chip-empty {
+  opacity: 0.55;
+}
+
+.tl-chip-empty .tl-chip-count {
+  background: transparent;
+}
+
+.tl-drag-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  padding: 3px 11px;
+  white-space: nowrap;
+}
+
+.tl-drag-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.tl-viewport-wrap {
+  position: relative;
+}
+
+.tl-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: none;
+}
+
+.tl-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.tl-viewport.tl-dragging {
+  cursor: grabbing;
+}
+
+.tl-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  z-index: 4;
+}
+
+.tl-fade.show {
+  opacity: 1;
+}
+
+.tl-fade-left {
+  left: 0;
+  background: linear-gradient(90deg, var(--panel), rgba(22, 27, 34, 0));
+}
+
+.tl-fade-right {
+  right: 0;
+  background: linear-gradient(270deg, var(--panel), rgba(22, 27, 34, 0));
+}
+
+.tl-rail {
+  position: relative;
+}
+
+.tl-canvas {
+  position: absolute;
+  left: 0;
+}
+
+.tl-curve {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+
+.tl-curve path {
+  fill: none;
+  stroke: #3d444d;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* 每种事件一个颜色，节点圆点、标签、图例、缩略导航共用同一个变量。 */
+.tl-node-commit {
+  --tl-dot: var(--accent);
+}
+
+.tl-node-bug {
+  --tl-dot: var(--danger);
+}
+
+.tl-node-note {
+  --tl-dot: var(--warning);
+}
+
+.tl-node-annotation {
+  --tl-dot: #a371f7;
+}
+
+.tl-node-milestone {
+  --tl-dot: var(--success);
+}
+
+.tl-node-gap {
+  --tl-dot: var(--muted);
+}
+
+.tl-node {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transition: opacity 0.16s ease;
+}
+
+.tl-dim {
+  opacity: 0.12;
+}
+
+.tl-dot {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--tl-dot);
+  box-shadow: 0 0 0 3px var(--bg);
+  z-index: 2;
+}
+
+.tl-card {
+  position: absolute;
+  left: -93px;
+  width: 186px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(1, 4, 9, 0.45);
+  transition: border-color 0.16s ease;
+}
+
+.tl-above .tl-card {
+  bottom: 18px;
+}
+
+.tl-below .tl-card {
+  top: 18px;
+}
+
+/* 连到圆点上的那根短线。卡片本身 overflow 可见，短线才不会被裁掉。 */
+.tl-card::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  height: 18px;
+  background: #2b3138;
+}
+
+.tl-above .tl-card::after {
+  bottom: -19px;
+}
+
+.tl-below .tl-card::after {
+  top: -19px;
+}
+
+.tl-clampable {
+  cursor: pointer;
+}
+
+.tl-card:hover {
+  border-color: var(--border-strong);
+}
+
+.tl-open {
+  border-color: rgba(88, 166, 255, 0.55);
+  box-shadow: 0 10px 30px rgba(1, 4, 9, 0.7);
+}
+
+.tl-clampable:focus-visible {
+  outline: 2px solid rgba(88, 166, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.tl-card-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+
+.tl-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  color: var(--tl-dot);
+}
+
+.tl-tag-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.tl-time {
+  margin-left: auto;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tl-title {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #f0f6fc;
+}
+
+.tl-body {
+  flex: none;
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* 收起时各截断两行；展开后完整显示。 */
+.tl-card:not(.tl-open) .tl-title,
+.tl-card:not(.tl-open) .tl-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.tl-extra {
+  flex: none;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.tl-detail {
+  margin: 0 0 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.tl-more {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.tl-chevron {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.18s ease;
+}
+
+.tl-open .tl-chevron {
+  transform: rotate(180deg);
+}
+
+/* 卡片窄，展开后的批注区改成竖排，超出部分在卡片内部滚动。 */
+.tl-card .annotation-panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding: 8px;
+}
+
+.tl-card .annotation-list {
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tl-card .annotation-item {
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.tl-card .annotation-form {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tl-card .annotation-form input,
+.tl-card .annotation-form select,
+.tl-card .annotation-form button {
+  flex: 0 0 auto;
+  width: 100%;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.tl-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+  font-size: 11.5px;
+  color: var(--muted);
+  flex: none;
+}
+
+.tl-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tl-legend-item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tl-dot);
+}
+
+.tl-minimap {
+  flex: 1;
+  min-width: 160px;
+}
+
+.tl-mm-track {
+  position: relative;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tl-mm-dot {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tl-dot);
+  transform: translate(-50%, -50%);
+  transition: opacity 0.16s ease;
+}
+
+.tl-mm-view {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  border-radius: 5px;
+  background: rgba(88, 166, 255, 0.16);
+  border: 1px solid rgba(88, 166, 255, 0.5);
+  pointer-events: none;
+}
+
+.tl-mm-note {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.tl-empty,
+.tl-orphan-hint {
+  margin: 0;
+  padding: 14px;
+}

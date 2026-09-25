@@ -13,6 +13,7 @@ devlog.db
 Thumbs.db
 .idea/
 .vscode/
+.obsidian/
 
 # Web frontend
 devlog/web/node_modules/

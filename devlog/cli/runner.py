@@ -48,6 +48,11 @@ from devlog.core.storage.database import (
 )
 from devlog.core.theming.cluster import cluster_themes
 from devlog.core.theming.models import SilencePeriod, Theme
+from devlog.core.timeline.events import (
+    DEFAULT_EVENT_LIMIT,
+    TimelineEvent,
+    build_timeline_stream,
+)
 
 
 class CLIUsageError(ValueError):
@@ -113,6 +118,20 @@ class TranslationResult:
     project_path: str
     translated_count: int
     remaining_count: int
+
+
+@dataclass(frozen=True)
+class TimelineStreamResult:
+    """合并后的时间线事件流，供 API 直接序列化。"""
+
+    project_id: int
+    project_name: str
+    project_path: str
+    events: list[TimelineEvent]
+    total_count: int
+    truncated_count: int
+    orphan_annotation_count: int
+    translations: dict[str, str]
 
 
 def _resolve(path: str | Path | None) -> Path:
@@ -319,6 +338,43 @@ def cmd_timeline(db: DevLogDB, project_id: int) -> TimelineResult:
         themes=cluster.themes,
         silence_periods=cluster.silence_periods,
         translations=translations,
+    )
+
+
+def cmd_timeline_events(
+    db: DevLogDB,
+    project_id: int,
+    limit: int | None = DEFAULT_EVENT_LIMIT,
+) -> TimelineStreamResult:
+    """把提交与人工记录合并成一条排好序的时间线事件流。
+
+    主题聚类与静默期直接复用 cmd_timeline 的同一套规则，避免"时间线说
+    没有空档、复盘页说有静默期"这种两套口径的问题。
+    """
+
+    project = db.get_project(project_id)
+    events = db.list_events(project_id, include_noise=True)
+    cluster = cluster_themes(
+        [event for event in events if event.noise_type == NoiseType.NONE]
+    )
+    stream = build_timeline_stream(
+        commits=events,
+        themes=cluster.themes,
+        silence_periods=cluster.silence_periods,
+        bugs=db.list_bug_records(project_id),
+        notes=db.list_daily_notes(project_id),
+        annotations=db.list_commit_annotations(project_id),
+        limit=limit,
+    )
+    return TimelineStreamResult(
+        project_id=project.project_id,
+        project_name=project.name,
+        project_path=project.path,
+        events=stream.events,
+        total_count=stream.total_count,
+        truncated_count=stream.truncated_count,
+        orphan_annotation_count=stream.orphan_annotation_count,
+        translations=db.list_commit_translations(project_id),
     )
 
 
