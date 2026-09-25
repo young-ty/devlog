@@ -18,8 +18,8 @@
   --warning-soft: rgba(210, 153, 34, 0.16);
   --danger: #f85149;
   --danger-soft: rgba(248, 81, 73, 0.12);
-  --radius: 10px;
-  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-sm: 5px;
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   line-height: 1.6;
 }
@@ -35,9 +35,9 @@ body {
 
 body {
   margin: 0;
-  background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(47, 129, 247, 0.09), transparent 60%),
-    var(--bg);
+  /* 纯色背景。之前这里有蓝紫光晕，是最典型的"生成式模板"痕迹，
+     而且和"本机开发工具"这个定位不搭。 */
+  background: var(--bg);
   color: var(--text);
 }
 
@@ -67,8 +67,9 @@ button {
 
 .topbar {
   border-bottom: 1px solid var(--border);
-  background: rgba(13, 17, 23, 0.86);
-  backdrop-filter: blur(8px);
+  /* 实心顶栏：不做毛玻璃。半透明 + 模糊会让滚动时内容糊成一片，
+     在长列表里反而更难读。 */
+  background: var(--bg);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -135,7 +136,6 @@ button {
   height: 7px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.16);
 }
 
 /* ---------- typography & page headers ---------- */
@@ -453,7 +453,7 @@ button.secondary:hover:not(:disabled) {
 
 .stat-value {
   margin-top: 4px;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 650;
   line-height: 1.2;
 }
@@ -647,19 +647,10 @@ button.secondary:hover:not(:disabled) {
   height: 70px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: linear-gradient(90deg, var(--panel), var(--panel-hover), var(--panel));
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+  /* 静态占位块。原来是一道来回流动的流光，属于"AI 加载动画"的典型符号，
+     而且一直动会抢注意力；"读取中…"那几个字已经把状态说清楚了。 */
+  background: var(--panel);
   margin-bottom: 10px;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
 }
 
 /* ---------- question list ---------- */

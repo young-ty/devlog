@@ -294,5 +294,32 @@ class ReviewReadingViewBindingsTests(unittest.TestCase):
         self.assertIn(".badge-finalized", styles)
 
 
+class VisualToneTests(unittest.TestCase):
+    """界面观感约束：不用生成式模板那套发光、毛玻璃和循环动画。
+
+    这些效果本身没错，但它们组合起来会让一个本地开发工具看起来像 AI
+    生成的演示页，也让人怀疑里面有多少是真东西。约束写进测试，避免以后
+    顺手又把光晕加回来。
+    """
+
+    def setUp(self) -> None:
+        self.styles = (WEB_DIR / "src" / "styles.css").read_text(
+            encoding="utf-8"
+        )
+
+    def test_no_decorative_glow_background(self) -> None:
+        self.assertNotIn("radial-gradient", self.styles)
+
+    def test_topbar_is_opaque_instead_of_frosted_glass(self) -> None:
+        self.assertNotIn("backdrop-filter", self.styles)
+
+    def test_no_endless_loading_animation(self) -> None:
+        self.assertNotIn("infinite", self.styles)
+        self.assertNotIn("@keyframes", self.styles)
+
+    def test_panel_radius_stays_tool_like(self) -> None:
+        self.assertIn("--radius: 8px;", self.styles)
+
+
 if __name__ == "__main__":
     unittest.main()
