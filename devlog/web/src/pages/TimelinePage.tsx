@@ -434,6 +434,25 @@ export function TimelinePage({
         </div>
       </div>
 
+      {stream ? (
+        <TimelineRail
+          events={stream.events}
+          truncatedCount={stream.truncated_count}
+          orphanAnnotationCount={stream.orphan_annotation_count}
+          annotations={annotations}
+          annotationBusy={annotationBusy}
+          onAddAnnotation={handleAddAnnotation}
+          onDeleteAnnotation={handleDeleteAnnotation}
+        />
+      ) : (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>开发时间线</h2>
+            <span className="panel-hint">正在合并事件流…</span>
+          </div>
+        </section>
+      )}
+
       {timeline.commits.length === 0 ? (
         <div className="empty">
           <strong>还没有可展示的提交</strong>
@@ -583,25 +602,6 @@ export function TimelinePage({
                   </p>
                 </div>
               ))}
-            </section>
-          )}
-
-          {stream ? (
-            <TimelineRail
-              events={stream.events}
-              truncatedCount={stream.truncated_count}
-              orphanAnnotationCount={stream.orphan_annotation_count}
-              annotations={annotations}
-              annotationBusy={annotationBusy}
-              onAddAnnotation={handleAddAnnotation}
-              onDeleteAnnotation={handleDeleteAnnotation}
-            />
-          ) : (
-            <section className="panel">
-              <div className="panel-head">
-                <h2>开发时间线</h2>
-                <span className="panel-hint">正在合并事件流…</span>
-              </div>
             </section>
           )}
         </>

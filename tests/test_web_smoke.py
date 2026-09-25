@@ -136,6 +136,13 @@ class WebSmokeTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("TimelineRail", page_text)
         self.assertIn("getProjectTimelineEvents", page_text)
+        # 时间线板块必须紧跟在统计卡后面。主题分组有几十个主题、很长，
+        # 排在它后面等于用户根本翻不到，这一轮就是这么被漏发现的。
+        self.assertLess(
+            page_text.index("<TimelineRail"),
+            page_text.index("主题分组"),
+            "时间线板块被排到了主题分组后面，用户要滚很久才能看到",
+        )
 
     def test_directory_picker_bindings_exist(self) -> None:
         api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
