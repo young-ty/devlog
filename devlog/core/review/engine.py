@@ -45,7 +45,7 @@ BASE_QUESTIONS: tuple[ReviewQuestion, ...] = (
     ReviewQuestion(
         section=SECTION_LESSONS,
         text=(
-            "踩过的坑里，哪一个最值得沉淀成你自己的知识库条目？"
+            "踩过的坑里，哪一个最值得记在自己本子上？"
             "根因是什么，下次怎么避免？"
         ),
     ),

@@ -38,7 +38,10 @@ def test_main_modules_present(doc: str) -> None:
 
 def test_roadmap_boundaries_present(doc: str) -> None:
     assert "V2" in doc and "一键捕获" in doc
-    assert "V3" in doc and "踩坑知识库" in doc
+    # 知识库已经移出范围：路线图上要能看出这件事是有意为之，
+    # 而不是被谁悄悄删掉了。
+    assert "V3" in doc and "复盘成稿" in doc
+    assert "移出本项目范围" in doc
     assert "非目标" in doc
 
 
