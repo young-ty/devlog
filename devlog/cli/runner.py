@@ -10,7 +10,7 @@ import re
 import subprocess
 import platform
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from devlog.core.capture.models import (
@@ -20,6 +20,7 @@ from devlog.core.capture.models import (
     CommitAnnotation,
     DailyNote,
 )
+from devlog.core.digest.day import DayDigest, build_day_digest, system_timezone
 from devlog.core.git_source.scanner import GitSourceError, scan_repository
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.deepseek import DeepSeekClient
@@ -662,6 +663,39 @@ def cmd_daily_note_list(
     """列出某个项目的每日笔记，新的在前。"""
 
     return db.list_daily_notes(project_id, since=since, until=until)
+
+
+def cmd_day_digest(
+    db: DevLogDB,
+    project_id: int,
+    day: date,
+    tz: timezone | None = None,
+) -> DayDigest:
+    """汇总某一天的事实：提交、Bug、已有笔记。
+
+    「哪一天」以本机时区为准。查询时故意左右各放宽一天，再交给
+    digest 模块按本地日历日精确过滤：Git 提交带自己的时区偏移，
+    用本地边界直接卡 since/until 会在边界上漏记录。
+    """
+
+    db.get_project(project_id)  # 项目不存在时抛出 DatabaseError（接口转 404）
+    zone = tz if tz is not None else system_timezone()
+    start = datetime.combine(day, time.min, tzinfo=zone)
+    end = start + timedelta(days=1)
+
+    commits = db.list_events(
+        project_id,
+        since=start - timedelta(days=1),
+        until=end + timedelta(days=1),
+    )
+    return build_day_digest(
+        day,
+        commits=commits,
+        bugs=db.list_bug_records(project_id),
+        note=db.get_daily_note(project_id, day),
+        has_cached_commits=db.has_cached_events(project_id),
+        tz=zone,
+    )
 
 
 def cmd_bug_capture(

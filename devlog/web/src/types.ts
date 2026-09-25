@@ -230,6 +230,45 @@ export interface DailyNoteInput {
   plan: string;
 }
 
+/** 当天小结里的一次提交。时间已经由后端换算到本机时区。 */
+export interface DayCommit {
+  short_hash: string;
+  subject: string;
+  committed_at: string;
+  files_changed: number;
+  insertions: number;
+  deletions: number;
+}
+
+/** 当天小结里的一条 Bug：只带定位和状态，详情回 Bug 页面看。 */
+export interface DayBug {
+  id: number;
+  title: string;
+  status: BugStatus;
+  captured_at: string | null;
+}
+
+/** 某一天的事实汇总（提交 + Bug + 能否起草）。 */
+export interface DayDigest {
+  day: string;
+  commit_count: number;
+  bug_count: number;
+  file_count: number;
+  insertions: number;
+  deletions: number;
+  first_commit_at: string | null;
+  last_commit_at: string | null;
+  active_minutes: number | null;
+  commits: DayCommit[];
+  bugs: DayBug[];
+  has_note: boolean;
+  /** 仓库有没有缓存提交：区分"这天没干活"和"还没扫描过"。 */
+  has_cached_commits: boolean;
+  is_empty: boolean;
+  /** 后端拼好的草稿文本，前端只负责填进输入框。 */
+  draft_text: string;
+}
+
 export interface BugRecord {
   id: number;
   project_id: number;

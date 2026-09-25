@@ -321,5 +321,37 @@ class VisualToneTests(unittest.TestCase):
         self.assertIn("--radius: 8px;", self.styles)
 
 
+class DayDigestBindingTests(unittest.TestCase):
+    """每日复盘页要先把"当天都发生了什么"摆出来，再让人动笔。"""
+
+    def test_api_binding_exists(self) -> None:
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function getDayDigest(", api_text)
+        self.assertIn("/digest", api_text)
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        self.assertIn("export interface DayDigest", types_text)
+        self.assertIn("has_cached_commits", types_text)
+
+    def test_notes_page_shows_the_digest(self) -> None:
+        page_text = (WEB_DIR / "src" / "pages" / "NotesPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "getDayDigest",
+            "当天都发生了什么",
+            "用提交记录起草",
+            "扫描最新提交",
+            "digest-row",
+            "draft_text",
+        ):
+            self.assertIn(token, page_text)
+
+    def test_digest_styles_exist(self) -> None:
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        for selector in (".digest-stats", ".digest-list", ".digest-row"):
+            self.assertIn(selector, styles, f"missing style: {selector}")
+
+
 if __name__ == "__main__":
     unittest.main()

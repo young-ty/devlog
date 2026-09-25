@@ -864,5 +864,114 @@ class FinalDocumentAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+def at_noon_utc(day: int) -> datetime:
+    """中午 12:00 UTC：任何常用时区下都还是同一天，日期断言不会因机器时区翻车。"""
+
+    return datetime(2026, 9, day, 12, 0, tzinfo=timezone.utc)
+
+
+class DayDigestAPITests(unittest.TestCase):
+    """当日小结接口：写每日复盘前，先看清那天到底发生了什么。"""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root)
+        self.db_path = Path(self.root) / "digest-api.db"
+        commit(self.repo, "a.py", "print(1)\n", "feat: 扫描器", at_noon_utc(10))
+        commit(self.repo, "a.py", "print(2)\n", "fix: 中文乱码", at_noon_utc(10))
+        commit(self.repo, "b.py", "print(3)\n", "feat: 第二天", at_noon_utc(11))
+        self.app = create_app(self.db_path)
+
+    def tearDown(self) -> None:
+        force_remove(self.root)
+
+    def _register(self, client: TestClient, *, scan: bool = True) -> int:
+        project_id = client.post(
+            "/api/projects", json={"path": str(self.repo)}
+        ).json()["project_id"]
+        if scan:
+            client.post(f"/api/projects/{project_id}/scan", json={})
+        return project_id
+
+    def test_digest_returns_the_days_commits_and_a_draft(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self._register(client)
+            response = client.get(
+                f"/api/projects/{project_id}/digest",
+                params={"date": "2026-09-10"},
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["day"], "2026-09-10")
+        self.assertEqual(body["commit_count"], 2)
+        self.assertEqual(
+            [item["subject"] for item in body["commits"]],
+            ["feat: 扫描器", "fix: 中文乱码"],
+        )
+        self.assertFalse(body["is_empty"])
+        self.assertIn("feat: 扫描器", body["draft_text"])
+
+    def test_quiet_day_is_empty_but_still_reports_being_scanned(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self._register(client)
+            body = client.get(
+                f"/api/projects/{project_id}/digest",
+                params={"date": "2026-09-20"},
+            ).json()
+        self.assertTrue(body["is_empty"])
+        self.assertEqual(body["commit_count"], 0)
+        # 扫过了但当天没提交，和"压根没扫过"是两件事，提示完全不同。
+        self.assertTrue(body["has_cached_commits"])
+        self.assertEqual(body["draft_text"], "")
+
+    def test_unscanned_project_is_flagged(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self._register(client, scan=False)
+            body = client.get(
+                f"/api/projects/{project_id}/digest",
+                params={"date": "2026-09-10"},
+            ).json()
+        self.assertFalse(body["has_cached_commits"])
+
+    def test_digest_reports_the_saved_note(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self._register(client)
+            url = f"/api/projects/{project_id}/notes"
+            client.post(url, json={"note_date": "2026-09-10", "summary": "写了扫描器"})
+            body = client.get(
+                f"/api/projects/{project_id}/digest",
+                params={"date": "2026-09-10"},
+            ).json()
+        self.assertTrue(body["has_note"])
+
+    def test_bugs_captured_today_show_up(self) -> None:
+        today = datetime.now(timezone.utc).astimezone().date().isoformat()
+        with TestClient(self.app) as client:
+            project_id = self._register(client)
+            client.post(
+                f"/api/projects/{project_id}/bugs",
+                json={"title": "选目录后闪退", "error_text": "Traceback ..."},
+            )
+            body = client.get(
+                f"/api/projects/{project_id}/digest",
+                params={"date": today},
+            ).json()
+        self.assertEqual(body["bug_count"], 1)
+        self.assertEqual(body["bugs"][0]["title"], "选目录后闪退")
+
+    def test_missing_date_is_rejected(self) -> None:
+        with TestClient(self.app) as client:
+            project_id = self._register(client)
+            response = client.get(f"/api/projects/{project_id}/digest")
+        self.assertEqual(response.status_code, 422)
+
+    def test_unknown_project_returns_404(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.get(
+                "/api/projects/999/digest", params={"date": "2026-09-10"}
+            )
+        self.assertEqual(response.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,7 @@ import {
   updateBug,
 } from "../api";
 import type { BugCaptureInput, BugRecord, BugStatus } from "../types";
-import { formatDateTime } from "../utils";
+import { BUG_STATUS_LABELS, formatDateTime } from "../utils";
 
 interface BugsPageProps {
   projectId: number;
@@ -25,12 +25,6 @@ interface BugDraft {
 type BugFilter = "all" | BugStatus;
 
 const STATUS_ORDER: BugStatus[] = ["open", "root_cause_found", "resolved"];
-
-const STATUS_LABELS: Record<BugStatus, string> = {
-  open: "刚捕获",
-  root_cause_found: "已定位根因",
-  resolved: "已解决",
-};
 
 export function BugsPage({
   projectId,
@@ -169,7 +163,7 @@ export function BugsPage({
     try {
       const updated = await updateBug(bugId, { status });
       applyUpdatedBug(updated);
-      setSuccess(`状态已更新：${STATUS_LABELS[status]}`);
+      setSuccess(`状态已更新：${BUG_STATUS_LABELS[status]}`);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -294,7 +288,7 @@ export function BugsPage({
               className={filter === item ? "" : "secondary"}
               onClick={() => setFilter(item)}
             >
-              {item === "all" ? "全部" : STATUS_LABELS[item]}
+              {item === "all" ? "全部" : BUG_STATUS_LABELS[item]}
             </button>
           ))}
         </div>
@@ -330,7 +324,7 @@ export function BugsPage({
                   </div>
                 </div>
                 <span className={`badge badge-${bug.status}`}>
-                  {STATUS_LABELS[bug.status]}
+                  {BUG_STATUS_LABELS[bug.status]}
                 </span>
               </div>
 
@@ -391,7 +385,7 @@ export function BugsPage({
                     disabled={busyBugId === bug.id}
                     onClick={() => handleStatus(bug.id, status)}
                   >
-                    {STATUS_LABELS[status]}
+                    {BUG_STATUS_LABELS[status]}
                   </button>
                 ))}
                 <button

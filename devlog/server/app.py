@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -449,6 +449,29 @@ def create_app(
             ),
         )
         return schemas.DailyNoteResponse.from_stored(stored)
+
+    # ------------------------------------------------------------------
+    # 记忆层：当日小结
+    # ------------------------------------------------------------------
+
+    @app.get(
+        "/api/projects/{project_id}/digest",
+        response_model=schemas.DayDigestResponse,
+    )
+    def project_day_digest(
+        project_id: int,
+        date: date = Query(
+            description="要汇总的日期（按本机时区），格式 YYYY-MM-DD"
+        ),
+        db=Depends(get_db),
+    ):
+        """某一天的提交、Bug 与草稿文本。日期是必填的：让服务端猜"今天"
+        会因为时区和服务端运行时长而变得不可预测，写笔记的人自己最清楚
+        要看哪一天。"""
+
+        project_path(db, project_id)
+        digest = runner.cmd_day_digest(db, project_id, date)
+        return schemas.DayDigestResponse.from_digest(digest)
 
     # ------------------------------------------------------------------
     # 记忆层：Bug 捕获

@@ -560,6 +560,20 @@ class DevLogDB:
         self._conn.commit()
         return cursor.rowcount
 
+    def has_cached_events(self, project_id: int) -> bool:
+        """这个项目有没有缓存的提交。
+
+        当日小结要靠它区分两种情况：「这天确实没提交」和「这仓库压根还
+        没扫描过」。给用户的提示完全相反，猜错比不提示更糟。
+        只取一行，不把整段历史读进内存。
+        """
+
+        row = self._conn.execute(
+            "SELECT 1 FROM commits WHERE project_id = ? LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        return row is not None
+
     # ------------------------------------------------------------------
     # commit 翻译（AI 生成的显示层）
     # ------------------------------------------------------------------

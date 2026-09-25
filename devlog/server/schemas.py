@@ -413,6 +413,89 @@ class DailyNoteResponse(BaseModel):
         )
 
 
+class DayCommitResponse(BaseModel):
+    """当天的一次提交。"""
+
+    short_hash: str
+    subject: str
+    committed_at: datetime
+    files_changed: int
+    insertions: int
+    deletions: int
+
+    @classmethod
+    def from_day_commit(cls, item) -> "DayCommitResponse":
+        return cls(
+            short_hash=item.short_hash,
+            subject=item.subject,
+            committed_at=item.committed_at,
+            files_changed=item.files_changed,
+            insertions=item.insertions,
+            deletions=item.deletions,
+        )
+
+
+class DayBugResponse(BaseModel):
+    """当天捕获的一条 Bug。"""
+
+    id: int
+    title: str
+    status: str
+    captured_at: datetime | None
+
+    @classmethod
+    def from_day_bug(cls, item) -> "DayBugResponse":
+        return cls(
+            id=item.id,
+            title=item.title,
+            status=item.status,
+            captured_at=item.captured_at,
+        )
+
+
+class DayDigestResponse(BaseModel):
+    """某一天的事实汇总：写每日复盘前先看一眼那天到底发生了什么。"""
+
+    day: date
+    commit_count: int
+    bug_count: int
+    file_count: int
+    insertions: int
+    deletions: int
+    first_commit_at: datetime | None
+    last_commit_at: datetime | None
+    active_minutes: int | None
+    commits: list[DayCommitResponse]
+    bugs: list[DayBugResponse]
+    has_note: bool
+    has_cached_commits: bool
+    is_empty: bool
+    draft_text: str
+
+    @classmethod
+    def from_digest(cls, digest) -> "DayDigestResponse":
+        return cls(
+            day=digest.day,
+            commit_count=digest.commit_count,
+            bug_count=digest.bug_count,
+            file_count=digest.file_count,
+            insertions=digest.insertions,
+            deletions=digest.deletions,
+            first_commit_at=digest.first_commit_at,
+            last_commit_at=digest.last_commit_at,
+            active_minutes=digest.active_minutes,
+            commits=[
+                DayCommitResponse.from_day_commit(item)
+                for item in digest.commits
+            ],
+            bugs=[DayBugResponse.from_day_bug(item) for item in digest.bugs],
+            has_note=digest.has_note,
+            has_cached_commits=digest.has_cached_commits,
+            is_empty=digest.is_empty,
+            draft_text=digest.draft_text,
+        )
+
+
 class BugCaptureRequest(BaseModel):
     title: str | None = None
     title_source: str = "manual"

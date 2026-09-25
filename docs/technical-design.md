@@ -84,7 +84,15 @@ V1 不包含 Bug 现场捕获、开发中批注、复盘定稿（V2/V3）。坑�
 - 草稿可标记「定稿 / 撤回定稿」，作为"这份我认了"的显式状态；
 - 导出 Markdown 到被扫描项目仓库的 `docs/retrospectives/`：导出是次要出口，只收已确认内容，定稿后导出在文末只交代未确认条数，不倾倒 AI 猜测。
 
-### 4.5 presentation（CLI / API / Web）
+### 4.5 memory_layer（记忆层与当日小结）
+
+- 每日笔记（`dev_notes`，每个项目每天一条）、Bug 捕获（`bug_records`）、commit 批注（`commit_annotations`）构成 Git 之外的人工记忆，全部落在 `~/.devlog/devlog.db`，不进用户仓库；
+- 当日小结（`devlog/core/digest/day.py`）把这些记录按日历日归并成一屏：当天的提交、当天捕获的 Bug、统计数字，以及一段可以直接填进「今天做了什么」的草稿；
+- 日期归属以**本机时区**为准，且只在这一个模块里判断：Git 提交自带时区偏移，用本地边界直接卡 `since/until` 会在边界上漏记录；
+- 小结只做事实归并，不调模型——省 token、无幻觉。要让 AI 概括"今天干了什么"，必须走已有的「AI 推断 + 用户确认」流程；
+- 「这仓库还没扫描过」和「这天没干活」是两种状态，用 `has_cached_commits` 分开表达，否则一句"当天没有记录"会把没扫描的仓库也盖进去。
+
+### 4.6 presentation（CLI / API / Web）
 
 MVP CLI（模块六，`python -m devlog`）：
 
@@ -174,6 +182,10 @@ GET    /api/projects
 POST   /api/projects            # 注册仓库
 POST   /api/projects/{id}/scan  # 扫描/增量扫描
 GET    /api/projects/{id}/timeline?range=...
+GET    /api/projects/{id}/digest?date=YYYY-MM-DD   # 当天小结（提交 + Bug）
+GET    /api/projects/{id}/notes?note_date=...
+POST   /api/projects/{id}/notes                    # 每日笔记（upsert）
+POST   /api/projects/{id}/bugs                     # Bug 现场捕获
 POST   /api/projects/{id}/reviews/generate
 GET    /api/projects/{id}/reviews/{draft_id}
 PATCH  /api/reviews/{draft_id}/claims/{claim_id}   # 确认/编辑

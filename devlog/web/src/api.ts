@@ -7,6 +7,7 @@ import type {
   BugUpdateInput,
   CommitAnnotation,
   ConfirmResult,
+  DayDigest,
   DailyNote,
   DailyNoteInput,
   DirectoryPickResult,
@@ -233,6 +234,16 @@ export function saveDailyNote(
   return request<DailyNote>(
     `/api/projects/${projectId}/notes`,
     jsonInit("POST", payload),
+  );
+}
+
+/** 拉取某一天的事实汇总：当天的提交、Bug 和可以直接填进笔记的草稿。 */
+export function getDayDigest(
+  projectId: number,
+  day: string,
+): Promise<DayDigest> {
+  return request<DayDigest>(
+    `/api/projects/${projectId}/digest${queryString({ date: day })}`,
   );
 }
 

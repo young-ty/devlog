@@ -58,6 +58,14 @@ def test_final_document_rules_have_one_implementation(doc: str) -> None:
     assert "定稿" in doc
 
 
+def test_day_digest_rules_present(doc: str) -> None:
+    """当日小结的两个关键口径：按本机时区算一天、不调模型。"""
+
+    assert "devlog/core/digest/day.py" in doc
+    assert "本机时区" in doc
+    assert "has_cached_commits" in doc
+
+
 def run_all() -> None:
     doc = read_doc()
     for test in (
@@ -67,6 +75,7 @@ def run_all() -> None:
         test_claim_source_and_status_model_present,
         test_storage_boundary_and_migration_present,
         test_final_document_rules_have_one_implementation,
+        test_day_digest_rules_present,
     ):
         test(doc)
         print(f"PASS  {test.__name__}")
