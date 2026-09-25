@@ -829,6 +829,40 @@ class FinalDocumentAPITests(unittest.TestCase):
             response = client.get("/api/reviews/999/document")
         self.assertEqual(response.status_code, 404)
 
+    def test_finalize_and_reopen_a_draft(self) -> None:
+        with TestClient(self.app) as client:
+            draft_id = self._draft(client)
+            before = client.get(f"/api/reviews/{draft_id}").json()
+            self.assertEqual(before["status"], "draft")
+            self.assertIsNone(before["finalized_at"])
+
+            sealed = client.post(
+                f"/api/reviews/{draft_id}/finalize", json={"finalize": True}
+            )
+            self.assertEqual(sealed.status_code, 200)
+            self.assertEqual(sealed.json()["status"], "finalized")
+            self.assertIsNotNone(sealed.json()["finalized_at"])
+
+            listed = client.get(
+                f"/api/projects/{before['project_id']}/reviews"
+            ).json()
+            self.assertEqual(listed[0]["status"], "finalized")
+
+            reopened = client.post(
+                f"/api/reviews/{draft_id}/finalize", json={"finalize": False}
+            )
+            self.assertEqual(reopened.json()["status"], "draft")
+            self.assertIsNone(
+                client.get(f"/api/reviews/{draft_id}").json()["finalized_at"]
+            )
+
+    def test_finalizing_an_unknown_draft_returns_404(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.post(
+                "/api/reviews/999/finalize", json={"finalize": True}
+            )
+        self.assertEqual(response.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -90,6 +90,9 @@ class ReviewSummaryResponse(_FromAttributes):
     confirmed_claims: int
     # ai / offline / unknown：列表里要能标出旧版本生成的草稿。
     generation_mode: str = "unknown"
+    # draft / finalized：定稿只是"这份我认了"，可以撤回。
+    status: str = "draft"
+    finalized_at: datetime | None = None
 
 
 class ReviewClaimResponse(BaseModel):
@@ -119,6 +122,8 @@ class ReviewDraftResponse(BaseModel):
     generated_at: datetime
     generation_mode: str = "unknown"
     exported_path: str | None = None
+    status: str = "draft"
+    finalized_at: datetime | None = None
     questions: list[ReviewQuestionResponse] = Field(default_factory=list)
     claims: list[ReviewClaimResponse] = Field(default_factory=list)
 
@@ -232,6 +237,18 @@ class ConfirmResponse(_FromAttributes):
     draft_id: int
     changed: int
     remaining_pending: int
+
+
+class FinalizeRequest(BaseModel):
+    """定稿或撤回定稿。定稿不锁内容，随时可以撤回继续改。"""
+
+    finalize: bool = True
+
+
+class FinalizeResponse(_FromAttributes):
+    draft_id: int
+    status: str
+    finalized_at: datetime | None = None
 
 
 class AnswerRequest(BaseModel):

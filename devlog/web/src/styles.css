@@ -586,6 +586,13 @@ button.secondary:hover:not(:disabled) {
   border: 1px dashed var(--border-strong);
 }
 
+/* 已定稿：这份复盘已经认过，绿色和"已确认"同属"可以放心引用"的一类 */
+.badge-finalized {
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid rgba(63, 185, 80, 0.45);
+}
+
 .badge-open {
   background: var(--warning-soft);
   color: #e3b341;
@@ -1550,6 +1557,30 @@ button.tiny {
 
 .rv-ico-head {
   color: var(--accent);
+}
+
+.rv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 3px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.rv-badge-done {
+  color: var(--success);
+  border-color: rgba(63, 185, 80, 0.5);
+  background: var(--success-soft);
+}
+
+.rv-badge-done .rv-ico {
+  color: var(--success);
 }
 
 .tl-drag-hint {

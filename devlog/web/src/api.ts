@@ -12,6 +12,7 @@ import type {
   DirectoryPickResult,
   ExportResult,
   FinalDocument,
+  FinalizeResult,
   GenerateResult,
   InitResult,
   LLMConfig,
@@ -155,6 +156,16 @@ export function getReviewDraft(draftId: number): Promise<ReviewDraft> {
 
 export function getReviewDocument(draftId: number): Promise<FinalDocument> {
   return request<FinalDocument>(`/api/reviews/${draftId}/document`);
+}
+
+export function finalizeReview(
+  draftId: number,
+  finalize: boolean,
+): Promise<FinalizeResult> {
+  return request<FinalizeResult>(
+    `/api/reviews/${draftId}/finalize`,
+    jsonInit("POST", { finalize }),
+  );
 }
 
 export function deleteReview(

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   confirmClaims,
   exportReview,
+  finalizeReview,
   getReviewDocument,
   getReviewDraft,
   saveAnswer,
@@ -133,6 +134,33 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
     }
   }
 
+  async function handleFinalize(finalize: boolean) {
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await finalizeReview(draftId, finalize);
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              status: result.status,
+              finalized_at: result.finalized_at,
+            }
+          : current,
+      );
+      setSuccess(
+        finalize
+          ? "已定稿。之后随时可以撤回继续修改。"
+          : "已撤回定稿，这份复盘回到进行中。",
+      );
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleSaveAnswer(number: number) {
     const value = answerDrafts[number];
     if (value === undefined) {
@@ -221,7 +249,20 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
         <button className="back-link" onClick={onBack}>
           ← 返回项目
         </button>
-        <h1>复盘草稿 #{draft.draft_id}</h1>
+        <h1>
+          复盘草稿 #{draft.draft_id}
+          {draft.status === "finalized" ? (
+            <span className="rv-badge rv-badge-done">
+              <Icon name="star" className="rv-ico" />
+              已定稿
+              {draft.finalized_at
+                ? ` · ${formatDateTime(draft.finalized_at)}`
+                : ""}
+            </span>
+          ) : (
+            <span className="rv-badge">进行中</span>
+          )}
+        </h1>
         <p className="page-sub">
           {draft.project_name} ·{" "}
           {formatRange(draft.range_start, draft.range_end)} · 生成于{" "}
@@ -285,6 +326,13 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
         <div className="rv-toolbar-spacer" />
         <button className="secondary" disabled={busy} onClick={handleExport}>
           导出 Markdown（可选）
+        </button>
+        <button
+          className={draft.status === "finalized" ? "secondary" : ""}
+          disabled={busy}
+          onClick={() => void handleFinalize(draft.status !== "finalized")}
+        >
+          {draft.status === "finalized" ? "撤回定稿" : "定稿并归档"}
         </button>
       </div>
 

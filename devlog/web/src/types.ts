@@ -115,6 +115,9 @@ export interface ReviewSummary {
   confirmed_claims: number;
   /** ai / offline / unknown：unknown 是旧版本生成的草稿。 */
   generation_mode: string;
+  /** draft / finalized：定稿只是"这份我认了"，可以随时撤回。 */
+  status: string;
+  finalized_at: string | null;
 }
 
 export interface ReviewClaim {
@@ -143,6 +146,8 @@ export interface ReviewDraft {
   /** ai / offline / unknown：unknown 表示这次改动之前生成的历史草稿。 */
   generation_mode: string;
   exported_path: string | null;
+  status: string;
+  finalized_at: string | null;
   questions: ReviewQuestion[];
   claims: ReviewClaim[];
 }
@@ -186,6 +191,12 @@ export interface FinalDocument {
   pending: FinalClaim[];
   included_count: number;
   pending_count: number;
+}
+
+export interface FinalizeResult {
+  draft_id: number;
+  status: string;
+  finalized_at: string | null;
 }
 
 export interface ConfirmResult {

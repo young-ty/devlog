@@ -32,7 +32,7 @@ from devlog.core.storage.database import DatabaseError, DevLogDB
 TZ = timezone(timedelta(hours=8))
 # 故意写死而不是引用模块常量：schema 版本一变，这里就必须有人手动改一次，
 # 逼着作者回来看"新版本的表和迁移测试都补了吗"。
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def at(day: int) -> datetime:
@@ -210,6 +210,69 @@ class DevLogDBTests(unittest.TestCase):
             self.assertEqual(record.draft.questions[0].text, "旧格式问题")
         finally:
             upgraded.close()
+
+    def test_v6_database_upgrades_and_old_drafts_are_not_finalized(self) -> None:
+        """老库升到 v7 之后，历史草稿必须是"没定稿过"，不能凭空变成成品。"""
+
+        v6_path = Path(self._tmp.name) / "v6.db"
+        make_version_database(v6_path, 6)
+
+        conn = database_module.sqlite3.connect(str(v6_path))
+        conn.execute(
+            "INSERT INTO projects (name, path, created_at) VALUES (?, ?, ?)",
+            (
+                "demo",
+                str(Path("D:/work/demo").resolve()),
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO review_drafts "
+            "(project_id, range_start, range_end, created_at, questions_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                1,
+                at(1).isoformat(),
+                at(3).isoformat(),
+                "2026-09-03T10:00:00+00:00",
+                "[]",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        upgraded = DevLogDB(v6_path)
+        try:
+            self.assertEqual(upgraded.schema_version, SCHEMA_VERSION)
+            record = upgraded.load_review_draft(1)
+            self.assertEqual(record.status, "draft")
+            self.assertIsNone(record.finalized_at)
+        finally:
+            upgraded.close()
+
+    def test_finalize_and_reopen_round_trip(self) -> None:
+        project_id = self.db.register_project("demo", "D:/work/demo")
+        draft_id = self.db.save_review_draft(project_id, make_sample_draft())
+
+        self.assertEqual(self.db.set_review_finalized(draft_id), "finalized")
+        record = self.db.load_review_draft(draft_id)
+        self.assertEqual(record.status, "finalized")
+        self.assertIsNotNone(record.finalized_at)
+        self.assertEqual(
+            self.db.list_review_drafts(project_id)[0].status, "finalized"
+        )
+
+        # 定稿不锁内容：撤回之后回到进行中，时间戳也清掉。
+        self.assertEqual(
+            self.db.set_review_finalized(draft_id, finalized=False), "draft"
+        )
+        reopened = self.db.load_review_draft(draft_id)
+        self.assertEqual(reopened.status, "draft")
+        self.assertIsNone(reopened.finalized_at)
+
+    def test_finalize_missing_draft_raises(self) -> None:
+        with self.assertRaises(DatabaseError):
+            self.db.set_review_finalized(9999)
 
     def test_draft_answers_round_trip_and_overwrite(self) -> None:
         project_id = self.db.register_project("demo", "D:/work/demo")

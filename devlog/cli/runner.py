@@ -447,6 +447,21 @@ def cmd_review_document(db: DevLogDB, draft_id: int) -> ReviewDocumentResult:
     )
 
 
+def cmd_review_finalize(
+    db: DevLogDB,
+    draft_id: int,
+    finalized: bool = True,
+) -> StoredReviewDraft:
+    """定稿或撤回定稿，返回更新后的草稿。
+
+    定稿只是"这份我认了"的标记，内容照样能改。返回整条记录是为了让调用方
+    直接拿到新状态和新时间戳，不用再查一次。
+    """
+
+    db.set_review_finalized(draft_id, finalized)
+    return cmd_review_show(db, draft_id)
+
+
 def cmd_review_confirm(
     db: DevLogDB,
     draft_id: int,

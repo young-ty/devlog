@@ -299,6 +299,8 @@ def create_app(
             generated_at=draft.generated_at,
             generation_mode=draft.generation_mode,
             exported_path=record.exported_path,
+            status=record.status,
+            finalized_at=record.finalized_at,
             questions=[
                 schemas.ReviewQuestionResponse(
                     text=question.text,
@@ -335,6 +337,22 @@ def create_app(
             claim_ids=payload.claim_ids,
             confirm_all=payload.confirm_all,
             note=payload.note,
+        )
+
+    @app.post(
+        "/api/reviews/{draft_id}/finalize",
+        response_model=schemas.FinalizeResponse,
+    )
+    def finalize_review(
+        draft_id: int,
+        payload: schemas.FinalizeRequest,
+        db=Depends(get_db),
+    ):
+        record = runner.cmd_review_finalize(db, draft_id, payload.finalize)
+        return schemas.FinalizeResponse(
+            draft_id=record.draft_id,
+            status=record.status,
+            finalized_at=record.finalized_at,
         )
 
     @app.put(

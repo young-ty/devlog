@@ -269,6 +269,30 @@ class ReviewReadingViewBindingsTests(unittest.TestCase):
         for selector in (".rv-layout", ".rv-toc", ".rv-pending-bar", ".rv-qa"):
             self.assertIn(selector, styles, f"missing style: {selector}")
 
+    def test_finalize_bindings_exist(self) -> None:
+        """定稿是一个可撤回的标记，界面和接口都得有。"""
+
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function finalizeReview(", api_text)
+        self.assertIn("/finalize", api_text)
+
+        page_text = (WEB_DIR / "src" / "pages" / "ReviewPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("handleFinalize", page_text)
+        self.assertIn("定稿并归档", page_text)
+        # 撤回入口必须和定稿入口同时存在，否则用户会被"定死"在一份稿上。
+        self.assertIn("撤回定稿", page_text)
+
+        project_text = (
+            WEB_DIR / "src" / "pages" / "ProjectPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn('review.status === "finalized"', project_text)
+
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".rv-badge-done", styles)
+        self.assertIn(".badge-finalized", styles)
+
 
 if __name__ == "__main__":
     unittest.main()

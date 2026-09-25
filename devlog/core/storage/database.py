@@ -32,7 +32,7 @@ from devlog.core.review.models import (
 )
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _SCHEMA_V1_STATEMENTS = [
     """
@@ -201,6 +201,21 @@ _SCHEMA_V6_STATEMENTS = [
     """,
 ]
 
+# 版本 6 -> 7：草稿记录自己有没有"定稿"。
+# 定稿只表示"这份复盘我认了、完成了"，不锁死内容——用户随时可以撤回继续改，
+# 所以只需要一个状态列加一个时间戳，不必另建快照表。
+# 老草稿留成 draft：它们从来没被定稿过，这个默认值就是事实。
+_SCHEMA_V7_STATEMENTS = [
+    """
+    ALTER TABLE review_drafts
+        ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'
+    """,
+    """
+    ALTER TABLE review_drafts
+        ADD COLUMN finalized_at TEXT
+    """,
+]
+
 _COMMIT_COLUMNS = (
     "project_id, hash, short_hash, author_name, author_email, committed_at, "
     "message_subject, files_changed, insertions, deletions, parents_count, noise_type"
@@ -266,6 +281,9 @@ class ReviewDraftSummary:
     confirmed_claims: int
     # ai / offline / unknown：列表里要能一眼看出哪份是旧版本生成的。
     generation_mode: str = "unknown"
+    # draft / finalized：定稿只表示"这份我认了"，可以随时撤回。
+    status: str = "draft"
+    finalized_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -287,6 +305,9 @@ class StoredReviewDraft:
     exported_path: str | None
     draft: ReviewDraft
     stored_claims: tuple[StoredReviewClaim, ...] = ()
+    # draft / finalized，加定稿时间。定稿可以撤回，所以两者一起更新。
+    status: str = "draft"
+    finalized_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -402,6 +423,10 @@ class DevLogDB:
             # 版本 5 -> 6 记录草稿的生成方式（ai / offline / unknown）。
             if current < 6:
                 for statement in _SCHEMA_V6_STATEMENTS:
+                    self._conn.execute(statement)
+            # 版本 6 -> 7 记录草稿有没有定稿（可撤回的标记，不是快照）。
+            if current < 7:
+                for statement in _SCHEMA_V7_STATEMENTS:
                     self._conn.execute(statement)
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
@@ -726,6 +751,7 @@ class DevLogDB:
             "SELECT d.id, d.project_id, p.name, p.path, "
             "d.range_start, d.range_end, d.created_at, "
             "d.questions_json, d.exported_path, d.generation_mode "
+            ", d.status, d.finalized_at "
             "FROM review_drafts d "
             "JOIN projects p ON p.id = d.project_id "
             "WHERE d.id = ?",
@@ -780,6 +806,10 @@ class DevLogDB:
             exported_path=row[8],
             draft=draft,
             stored_claims=tuple(claims),
+            status=row[10] or "draft",
+            finalized_at=(
+                datetime.fromisoformat(row[11]) if row[11] else None
+            ),
         )
 
     def confirm_review_claim(
@@ -812,6 +842,30 @@ class DevLogDB:
         )
         self._conn.commit()
         return cursor.rowcount
+
+    def set_review_finalized(self, draft_id: int, finalized: bool = True) -> str:
+        """把草稿标成已定稿或撤回定稿，返回新状态。
+
+        定稿只是"这份复盘我认了"的标记，不锁死内容：撤回之后照样能改论断、
+        补回答、重新导出。要锁内容就得存快照，那是以后做"历次定稿对比"时
+        才需要的事，现在不做。
+        """
+
+        if finalized:
+            status = "finalized"
+            stamp: str | None = datetime.now(timezone.utc).isoformat()
+        else:
+            status = "draft"
+            stamp = None
+
+        cursor = self._conn.execute(
+            "UPDATE review_drafts SET status = ?, finalized_at = ? WHERE id = ?",
+            (status, stamp, draft_id),
+        )
+        self._conn.commit()
+        if cursor.rowcount != 1:
+            raise DatabaseError(f"review draft not found: {draft_id}")
+        return status
 
     def mark_draft_exported(self, draft_id: int, path: str | Path) -> None:
         """记录草稿最后导出到哪个文件。"""
@@ -846,6 +900,8 @@ class DevLogDB:
             ai_pending_claims=pending,
             confirmed_claims=confirmed,
             generation_mode=record.draft.generation_mode,
+            status=record.status,
+            finalized_at=record.finalized_at,
         )
 
     def delete_review_draft(self, draft_id: int) -> bool:

@@ -327,6 +327,9 @@ export function ProjectPage({
                     {review.ai_pending_claims === 0 && (
                       <span className="badge badge-confirmed">已处理完</span>
                     )}
+                    {review.status === "finalized" && (
+                      <span className="badge badge-finalized">已定稿</span>
+                    )}
                   </div>
                   <div className="item-path">
                     {formatRange(
