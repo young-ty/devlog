@@ -5,13 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from devlog.core.review.models import (
-    SECTION_ASSETS,
-    SECTION_ISSUES,
     SECTION_ORDER,
     ClaimStatus,
     ReviewClaim,
     ReviewDraft,
 )
+from devlog.core.review.document import section_placeholder
 
 
 STATUS_LABELS = {
@@ -20,18 +19,6 @@ STATUS_LABELS = {
     ClaimStatus.CONFIRMED: "✔ 已确认",
     ClaimStatus.EDITED: "✏️ 已修改",
 }
-
-# 没有引导问题、也不会自动填充的板块，说明它的内容该从哪里来。
-SECTION_HINTS = {
-    SECTION_ISSUES: (
-        "> 本板块由 Bug 捕获记录自动汇总。还没有内容时，"
-        "用 Bug 捕获功能把报错、环境和 Git 状态存下来。"
-    ),
-    SECTION_ASSETS: (
-        "> 本板块由 AI 横跨所有开发主题归纳，逐条确认之后才算数。"
-    ),
-}
-
 
 class ReviewExportError(ValueError):
     """当复盘文档无法写入时抛出。"""
@@ -52,15 +39,6 @@ def _claim_line(claim: ReviewClaim) -> str:
     label = STATUS_LABELS.get(claim.status, claim.status.value)
     note = f"（备注：{claim.user_note}）" if claim.user_note else ""
     return f"- {claim.text}{sources} · {label}{note}"
-
-
-def _section_placeholder(section: str, draft: ReviewDraft) -> str:
-    """空板块的提示语：能指到具体问题就指过去，别只说"请回答文末问题"。"""
-
-    for index, question in enumerate(draft.questions, start=1):
-        if question.section == section:
-            return f"> 本板块需要你补充：请回答文末第 {index} 个引导问题。"
-    return SECTION_HINTS.get(section, "> 本板块暂无可自动填充的内容。")
 
 
 def _answer_lines(number: int, answer: str) -> list[str]:
@@ -101,7 +79,7 @@ def export_markdown(draft: ReviewDraft) -> str:
             lines.extend(_answer_lines(number, answer))
 
         if not section_claims and not answered:
-            lines.append(_section_placeholder(section, draft))
+            lines.append("> " + section_placeholder(section, draft.questions))
         lines.append("")
 
     # 已经回答过的问题已经把内容落到对应板块，这里只列还缺的部分，

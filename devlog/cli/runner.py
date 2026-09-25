@@ -31,6 +31,7 @@ from devlog.core.llm.themes import (
 )
 from devlog.core.llm.translation import translate_commit_subjects
 from devlog.core.review.engine import build_review_draft
+from devlog.core.review.document import FinalDocument, build_final_document
 from devlog.core.review.markdown import write_markdown
 from devlog.core.review.models import (
     GENERATION_MODE_AI,
@@ -422,6 +423,28 @@ def cmd_review_show(db: DevLogDB, draft_id: int) -> StoredReviewDraft:
     """加载一份草稿及其论断，供查看/确认使用。"""
 
     return db.load_review_draft(draft_id)
+
+
+@dataclass(frozen=True)
+class ReviewDocumentResult:
+    """成稿文档 + 它的项目上下文，供 API 直接序列化。"""
+
+    record: StoredReviewDraft
+    document: FinalDocument
+
+
+def cmd_review_document(db: DevLogDB, draft_id: int) -> ReviewDocumentResult:
+    """把草稿整理成成稿文档：只收人类认过的内容。
+
+    网页和将来的 CLI 都走这一条路，成稿规则就不会有第二份实现。
+    草稿只读一次，免得两处加载结果对不上。
+    """
+
+    record = cmd_review_show(db, draft_id)
+    return ReviewDocumentResult(
+        record=record,
+        document=build_final_document(record.draft),
+    )
 
 
 def cmd_review_confirm(

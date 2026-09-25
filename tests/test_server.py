@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from devlog.core.storage.database import DevLogDB
+from devlog.core.review.models import SECTION_ORDER
 from devlog.server.app import create_app
 
 
@@ -693,6 +694,140 @@ class TimelineEventsAPITests(unittest.TestCase):
         with TestClient(self.app) as client:
             response = client.get("/api/projects/999/timeline-events")
             self.assertEqual(response.status_code, 404)
+
+
+class FinalDocumentAPITests(unittest.TestCase):
+    """成稿文档接口：只把认过的内容交给界面。"""
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root)
+        self.db_path = Path(self.root) / "document.db"
+        commit(self.repo, "login.py", "def login(): ...\n", "feat: add login page", at(1))
+        commit(self.repo, "pay.py", "def pay(): ...\n", "feat: add payment page", at(2))
+        self.app = create_app(self.db_path)
+
+    def tearDown(self) -> None:
+        force_remove(self.root)
+
+    def _draft(self, client) -> int:
+        project_id = client.post(
+            "/api/projects", json={"path": str(self.repo)}
+        ).json()["project_id"]
+        client.post(f"/api/projects/{project_id}/scan", json={})
+        response = client.post(
+            f"/api/projects/{project_id}/reviews/generate",
+            json={"offline": True},
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()["draft_id"]
+
+    def _make_one_claim_pending(self, draft_id: int) -> None:
+        """把第一条论断翻成 ai_pending。
+
+        离线草稿全是事实论断，真正的 AI 草稿要调外部模型，测试不该依赖网络。
+        收录规则本身在 tests/test_review_document.py 里逐条覆盖过了，这里只
+        验证接口把"这条还没确认"如实透传出去。
+        """
+
+        db = DevLogDB(self.db_path)
+        try:
+            row = db._conn.execute(
+                "SELECT id FROM review_claims WHERE draft_id = ? "
+                "ORDER BY position LIMIT 1",
+                (draft_id,),
+            ).fetchone()
+            self.assertIsNotNone(row, "离线草稿里竟然一条论断都没有")
+            db._conn.execute(
+                "UPDATE review_claims SET status = 'ai_pending' WHERE id = ?",
+                (int(row[0]),),
+            )
+            db._conn.commit()
+        finally:
+            db.close()
+
+    def test_document_has_the_seven_sections_in_order(self) -> None:
+        with TestClient(self.app) as client:
+            draft_id = self._draft(client)
+            response = client.get(f"/api/reviews/{draft_id}/document")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual([item["title"] for item in body["sections"]], list(SECTION_ORDER))
+        for section in body["sections"]:
+            self.assertTrue(section["icon"])
+            self.assertTrue(section["hint"])
+        self.assertEqual(body["draft_id"], draft_id)
+        self.assertIn("开发复盘", body["title"])
+
+    def test_every_claim_is_either_in_the_body_or_counted_as_pending(self) -> None:
+        with TestClient(self.app) as client:
+            draft_id = self._draft(client)
+            draft = client.get(f"/api/reviews/{draft_id}").json()
+            document = client.get(f"/api/reviews/{draft_id}/document").json()
+        self.assertEqual(
+            document["included_count"] + document["pending_count"],
+            len(draft["claims"]),
+        )
+        ai_pending = [
+            claim for claim in draft["claims"] if claim["status"] == "ai_pending"
+        ]
+        self.assertEqual(document["pending_count"], len(ai_pending))
+
+    def test_confirming_claims_moves_them_into_the_body(self) -> None:
+        with TestClient(self.app) as client:
+            draft_id = self._draft(client)
+            self._make_one_claim_pending(draft_id)
+            before = client.get(f"/api/reviews/{draft_id}/document").json()
+            self.assertEqual(before["pending_count"], 1)
+            pending_text = before["pending"][0]["text"]
+            self.assertNotIn(
+                pending_text,
+                [
+                    claim["text"]
+                    for section in before["sections"]
+                    for claim in section["claims"]
+                ],
+            )
+            client.post(
+                f"/api/reviews/{draft_id}/confirm",
+                json={"all": True},
+            )
+            after = client.get(f"/api/reviews/{draft_id}/document").json()
+        self.assertEqual(after["pending_count"], 0)
+        self.assertIn(
+            pending_text,
+            [
+                claim["text"]
+                for section in after["sections"]
+                for claim in section["claims"]
+            ],
+        )
+
+    def test_answers_show_up_in_the_matching_section(self) -> None:
+        with TestClient(self.app) as client:
+            draft_id = self._draft(client)
+            draft = client.get(f"/api/reviews/{draft_id}").json()
+            question = draft["questions"][0]
+            if not question["section"]:
+                self.skipTest("这份草稿的问题没有章节归属")
+            client.put(
+                f"/api/reviews/{draft_id}/answers/1",
+                json={"answer": "范围收敛是我拍的板"},
+            )
+            document = client.get(f"/api/reviews/{draft_id}/document").json()
+        target = [
+            item
+            for item in document["sections"]
+            if item["title"] == question["section"]
+        ][0]
+        self.assertEqual(len(target["answers"]), 1)
+        self.assertEqual(target["answers"][0]["answer"], "范围收敛是我拍的板")
+        self.assertNotIn(question["text"], target["open_questions"])
+
+    def test_unknown_draft_returns_404(self) -> None:
+        with TestClient(self.app) as client:
+            response = client.get("/api/reviews/999/document")
+        self.assertEqual(response.status_code, 404)
 
 
 if __name__ == "__main__":

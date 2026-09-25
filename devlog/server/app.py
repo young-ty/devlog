@@ -271,6 +271,18 @@ def create_app(
         )
 
     @app.get(
+        "/api/reviews/{draft_id}/document",
+        response_model=schemas.FinalDocumentResponse,
+    )
+    def get_review_document(draft_id: int, db=Depends(get_db)):
+        result = runner.cmd_review_document(db, draft_id)
+        return schemas.FinalDocumentResponse.from_document(
+            result.document,
+            draft_id=result.record.draft_id,
+            project_path=result.record.project_path,
+        )
+
+    @app.get(
         "/api/reviews/{draft_id}",
         response_model=schemas.ReviewDraftResponse,
     )

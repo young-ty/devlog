@@ -123,6 +123,103 @@ class ReviewDraftResponse(BaseModel):
     claims: list[ReviewClaimResponse] = Field(default_factory=list)
 
 
+class FinalClaimResponse(BaseModel):
+    """成稿里的一条陈述。status 让读者一眼分清事实、已确认和改过的。"""
+
+    text: str
+    status: str
+    sources: list[str] = Field(default_factory=list)
+    user_note: str = ""
+
+    @classmethod
+    def from_claim(cls, claim):
+        return cls(
+            text=claim.text,
+            status=claim.status,
+            sources=list(claim.sources),
+            user_note=claim.user_note,
+        )
+
+
+class FinalAnswerResponse(BaseModel):
+    question_number: int
+    question: str
+    answer: str
+
+
+class FinalSectionResponse(BaseModel):
+    title: str
+    icon: str
+    claims: list[FinalClaimResponse] = Field(default_factory=list)
+    answers: list[FinalAnswerResponse] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    hint: str = ""
+    count: int = 0
+    is_empty: bool = True
+
+    @classmethod
+    def from_section(cls, section):
+        return cls(
+            title=section.title,
+            icon=section.icon,
+            claims=[
+                FinalClaimResponse.from_claim(claim) for claim in section.claims
+            ],
+            answers=[
+                FinalAnswerResponse(
+                    question_number=answer.question_number,
+                    question=answer.question,
+                    answer=answer.answer,
+                )
+                for answer in section.answers
+            ],
+            open_questions=list(section.open_questions),
+            hint=section.hint,
+            count=section.count,
+            is_empty=section.is_empty,
+        )
+
+
+class FinalDocumentResponse(BaseModel):
+    """成稿文档：界面按它排版，Markdown 导出迟早也吃同一份数据。"""
+
+    draft_id: int
+    title: str
+    project_name: str
+    project_path: str
+    range_start: datetime
+    range_end: datetime
+    generated_at: datetime
+    generation_mode: str = "unknown"
+    sections: list[FinalSectionResponse] = Field(default_factory=list)
+    pending: list[FinalClaimResponse] = Field(default_factory=list)
+    included_count: int = 0
+    pending_count: int = 0
+
+    @classmethod
+    def from_document(cls, document, *, draft_id: int, project_path: str):
+        return cls(
+            draft_id=draft_id,
+            title=document.title,
+            project_name=document.project_name,
+            project_path=project_path,
+            range_start=document.range_start,
+            range_end=document.range_end,
+            generated_at=document.generated_at,
+            generation_mode=document.generation_mode,
+            sections=[
+                FinalSectionResponse.from_section(section)
+                for section in document.sections
+            ],
+            pending=[
+                FinalClaimResponse.from_claim(claim)
+                for claim in document.pending
+            ],
+            included_count=document.included_count,
+            pending_count=document.pending_count,
+        )
+
+
 class ConfirmRequest(BaseModel):
     claim_ids: list[int] = Field(default_factory=list)
     confirm_all: bool = Field(default=False, alias="all")
