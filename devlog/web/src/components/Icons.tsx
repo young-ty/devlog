@@ -17,7 +17,10 @@ export type IconName =
   | "clock"
   | "calendar"
   | "tag"
-  | "layers";
+  | "layers"
+  | "star"
+  | "warning"
+  | "help";
 
 const PATHS: Record<IconName, string[]> = {
   commit: [
@@ -85,7 +88,24 @@ const PATHS: Record<IconName, string[]> = {
     "M2.6 8 8 11l5.4-3",
     "M2.6 11 8 14l5.4-3",
   ],
+  // 成稿三个章节专用：可复用资产（星）、踩坑总结（警示）、遗留与下一步（问号）。
+  star: [
+    "M8 2.2 9.6 6l4 .3-3 2.6.9 3.9L8 10.9 4.5 12.8l.9-3.9-3-2.6 4-.3z",
+  ],
+  warning: ["M8 2.5 14 13H2z", "M8 6.4v3", "M8 11.4h.01"],
+  help: [
+    "M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0",
+    "M6.4 6.4a1.7 1.7 0 1 1 2.2 1.7c-.4.2-.6.5-.6.9v.3",
+    "M8 11.6h.01",
+  ],
 };
+
+/** 图标名的运行时清单：后端给的章节图标是个字符串，得先验一下再用。 */
+export const ICON_NAMES = Object.keys(PATHS) as IconName[];
+
+export function isIconName(value: string): value is IconName {
+  return (ICON_NAMES as string[]).includes(value);
+}
 
 export function Icon({
   name,

@@ -11,6 +11,7 @@ import type {
   DailyNoteInput,
   DirectoryPickResult,
   ExportResult,
+  FinalDocument,
   GenerateResult,
   InitResult,
   LLMConfig,
@@ -150,6 +151,10 @@ export function generateReview(
 
 export function getReviewDraft(draftId: number): Promise<ReviewDraft> {
   return request<ReviewDraft>(`/api/reviews/${draftId}`);
+}
+
+export function getReviewDocument(draftId: number): Promise<FinalDocument> {
+  return request<FinalDocument>(`/api/reviews/${draftId}/document`);
 }
 
 export function deleteReview(

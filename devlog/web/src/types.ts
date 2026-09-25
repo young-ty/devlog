@@ -147,6 +147,47 @@ export interface ReviewDraft {
   claims: ReviewClaim[];
 }
 
+export interface FinalClaim {
+  text: string;
+  status: ClaimStatus;
+  sources: string[];
+  user_note: string;
+}
+
+export interface FinalAnswer {
+  question_number: number;
+  question: string;
+  answer: string;
+}
+
+export interface FinalSection {
+  title: string;
+  /** 图标名，和 Icons 组件同名；后端说了算，前端只负责画。 */
+  icon: string;
+  claims: FinalClaim[];
+  answers: FinalAnswer[];
+  open_questions: string[];
+  hint: string;
+  count: number;
+  is_empty: boolean;
+}
+
+/** 成稿：只收人类认过的内容，未确认的 AI 推断单独放在 pending 里。 */
+export interface FinalDocument {
+  draft_id: number;
+  title: string;
+  project_name: string;
+  project_path: string;
+  range_start: string;
+  range_end: string;
+  generated_at: string;
+  generation_mode: string;
+  sections: FinalSection[];
+  pending: FinalClaim[];
+  included_count: number;
+  pending_count: number;
+}
+
 export interface ConfirmResult {
   draft_id: number;
   changed: number;

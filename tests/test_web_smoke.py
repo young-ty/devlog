@@ -234,5 +234,41 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("built in", output)
 
 
+class ReviewReadingViewBindingsTests(unittest.TestCase):
+    """复盘页要有「成稿阅读」视图，并且收录规则不许在前端再写一份。"""
+
+    def test_reading_view_component_and_api_exist(self) -> None:
+        self.assertTrue(
+            (WEB_DIR / "src" / "components" / "ReviewReadingView.tsx").exists(),
+            "缺少成稿阅读视图组件",
+        )
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        self.assertIn("export function getReviewDocument(", api_text)
+        self.assertIn("/document", api_text)
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        for type_name in ("FinalDocument", "FinalSection", "FinalClaim"):
+            self.assertIn(type_name, types_text, f"missing type: {type_name}")
+
+    def test_reading_view_opens_by_default(self) -> None:
+        page_text = (WEB_DIR / "src" / "pages" / "ReviewPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ReviewReadingView", page_text)
+        self.assertIn("getReviewDocument", page_text)
+        # 复盘首先是拿来读的：默认进阅读视图，校对是过程不是结果。
+        self.assertIn('useState<"read" | "proof">("read")', page_text)
+        # 成稿视图不提供编辑入口，免得读的时候手滑改坏论断。
+        reading_text = (
+            WEB_DIR / "src" / "components" / "ReviewReadingView.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("onConfirm", reading_text)
+        self.assertIn("rv-pending-bar", reading_text)
+
+    def test_reading_view_styles_exist(self) -> None:
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        for selector in (".rv-layout", ".rv-toc", ".rv-pending-bar", ".rv-qa"):
+            self.assertIn(selector, styles, f"missing style: {selector}")
+
+
 if __name__ == "__main__":
     unittest.main()

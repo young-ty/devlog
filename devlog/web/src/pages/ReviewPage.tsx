@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import {
   confirmClaims,
   exportReview,
+  getReviewDocument,
   getReviewDraft,
   saveAnswer,
 } from "../api";
-import type { ReviewDraft } from "../types";
+import type { FinalDocument, ReviewDraft } from "../types";
 import { ClaimCard } from "../components/ClaimCard";
+import { Icon } from "../components/Icons";
+import { ReviewReadingView } from "../components/ReviewReadingView";
 import { formatDateTime, formatRange } from "../utils";
 
 interface ReviewPageProps {
@@ -38,6 +41,10 @@ function emptySectionHint(section: string, generationMode: string): string {
 
 export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
+  // 成稿是从后端拿的一份排好版的数据，前端不再自己判断哪条论断算数。
+  const [finalDoc, setFinalDoc] = useState<FinalDocument | null>(null);
+  // 默认进阅读视图：复盘首先是拿来读的，逐条校对是过程而不是结果。
+  const [view, setView] = useState<"read" | "proof">("read");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -52,10 +59,11 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getReviewDraft(draftId)
-      .then((item) => {
+    Promise.all([getReviewDraft(draftId), getReviewDocument(draftId)])
+      .then(([item, document]) => {
         if (!cancelled) {
           setDraft(item);
+          setFinalDoc(document);
           setError("");
         }
       })
@@ -254,11 +262,49 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
         </div>
       </div>
 
+      <div className="rv-toolbar">
+        <div className="rv-seg">
+          <button
+            type="button"
+            className={view === "read" ? "on" : ""}
+            onClick={() => setView("read")}
+          >
+            <Icon name="note" className="rv-ico" />
+            成稿阅读
+          </button>
+          <button
+            type="button"
+            className={view === "proof" ? "on" : ""}
+            onClick={() => setView("proof")}
+          >
+            <Icon name="annotation" className="rv-ico" />
+            逐条校对
+            {pendingCount > 0 && <em>{pendingCount}</em>}
+          </button>
+        </div>
+        <div className="rv-toolbar-spacer" />
+        <button className="secondary" disabled={busy} onClick={handleExport}>
+          导出 Markdown（可选）
+        </button>
+      </div>
+
+      {view === "read" &&
+        (finalDoc ? (
+          <ReviewReadingView
+            document={finalDoc}
+            onReviewPending={() => setView("proof")}
+          />
+        ) : (
+          <p className="panel-hint">正在整理成稿…</p>
+        ))}
+
+      {view === "proof" && (
+        <>
       <section className="panel">
         <div className="panel-head">
           <h2>确认进度</h2>
           <span className="panel-hint">
-            {doneRatio}% 已完成 · 建议逐条阅读后再导出
+            {doneRatio}% 已完成 · 确认过的内容才会进成稿
           </span>
         </div>
         <div className="progress">
@@ -273,13 +319,6 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
             onClick={confirmAll}
           >
             全部确认（{pendingCount}）
-          </button>
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={handleExport}
-          >
-            导出 Markdown
           </button>
         </div>
         {draft.exported_path && (
@@ -379,6 +418,8 @@ export function ReviewPage({ draftId, onBack }: ReviewPageProps) {
             })}
           </div>
         </section>
+      )}
+        </>
       )}
     </main>
   );
