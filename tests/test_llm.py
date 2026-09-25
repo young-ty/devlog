@@ -229,6 +229,18 @@ class AssetSummaryTests(unittest.TestCase):
             [],
         )
 
+    def test_prompt_demands_a_quality_bar_instead_of_padding(self) -> None:
+        """提示词只说"最多 5 条"，模型就会当配额凑满，所以必须写死质量门槛。"""
+
+        client = FakeAssetClient({"assets": []})
+        summarize_assets([self._theme()], [self._summary()], client)
+        prompt = client.json_prompts[0]
+
+        self.assertIn("One-off chores", prompt)
+        self.assertIn("Returning fewer is better than padding", prompt)
+        self.assertIn("empty list", prompt)
+        self.assertIn("archiving demo images", prompt)
+
     def test_no_themes_skips_the_call(self) -> None:
         client = FakeAssetClient({"assets": []})
         self.assertEqual(summarize_assets([], [], client), [])

@@ -30,15 +30,23 @@ THEME_JSON_INSTRUCTION = (
 )
 
 ASSET_JSON_INSTRUCTION = (
-    "Now look at the themes as a whole and find work that is worth "
+    "Now look at all the themes together and pick out work that is worth "
     'extracting into reusable assets. Return a JSON object only, with '
     'exactly one key: "assets". Its value is a list of objects, each with '
     '"name" (short Chinese name of the reusable function/module/approach), '
-    '"rationale" (Chinese, why it is worth extracting and where it would be '
-    'reused), and "sources" (list of commit hashes you relied on). '
-    "Return at most 5 items, ordered by value. If nothing is worth "
-    "extracting, return an empty list. Do not invent work that the "
-    "themes do not mention."
+    '"rationale" (Chinese, why it is worth extracting and where else it '
+    'would be reused), and "sources" (list of commit hashes you relied on). '
+    "Quality bar: an asset is a pattern another project could pick up. "
+    "One-off chores from this project do NOT qualify - for example "
+    "archiving demo images, trimming a report to a page count, bumping a "
+    "specific version number, or reorganising folders all belong to the "
+    "timeline, not to reusable assets. "
+    # 写死"最多 5 条"会让模型把它当成配额，硬凑满；这里刻意强调
+    # 少而精，并明确允许空列表。
+    "Return at most 5 items, best first. Returning fewer is better than "
+    "padding: 1 to 3 solid items is a normal result, and an empty list is "
+    "the right answer when nothing clears the bar. Do not invent work that "
+    "the themes do not mention."
 )
 
 
