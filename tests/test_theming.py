@@ -65,6 +65,44 @@ class ThemeClusteringTests(unittest.TestCase):
         self.assertEqual(len(result.themes), 2)
         self.assertEqual([theme.title for theme in result.themes], ["login", "payment"])
 
+    def test_chinese_commits_cluster_by_shared_topic(self) -> None:
+        """中文提交没有空格，必须靠 2 字滑窗词元才能聚到一起。"""
+
+        events = [
+            make_event(1, 1, "feat: 新增菜谱推荐接口"),
+            make_event(2, 2, "fix: 菜谱推荐结果去重"),
+            make_event(3, 3, "feat: 推荐接口加上分页"),
+        ]
+
+        result = cluster_themes(events)
+
+        self.assertEqual(len(result.themes), 1)
+        self.assertEqual(result.themes[0].commit_count, 3)
+        # 中文主题标题用可读原句，而不是 bigram 碎片。
+        self.assertEqual(result.themes[0].title, "新增菜谱推荐接口")
+
+    def test_chinese_action_words_do_not_merge_unrelated_work(self) -> None:
+        """两条提交都写了"新增"不代表它们是同一件事。"""
+
+        events = [
+            make_event(1, 1, "feat: 新增菜谱推荐接口"),
+            make_event(2, 2, "feat: 新增登录页面"),
+        ]
+
+        result = cluster_themes(events)
+
+        self.assertEqual(len(result.themes), 2)
+
+    def test_mixed_chinese_and_english_subjects_cluster(self) -> None:
+        events = [
+            make_event(1, 1, "feat: 新增 login 登录页面"),
+            make_event(2, 2, "fix: login 按钮错位"),
+        ]
+
+        result = cluster_themes(events)
+
+        self.assertEqual(len(result.themes), 1)
+
     def test_noise_commits_do_not_split_or_enter_themes(self) -> None:
         events = [
             make_event(1, 1, "feat: add login page"),

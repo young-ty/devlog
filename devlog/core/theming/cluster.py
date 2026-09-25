@@ -20,6 +20,8 @@ from devlog.core.theming.models import ClusterResult, SilencePeriod, Theme
 
 _CONVENTIONAL_PREFIX = re.compile(r"^([a-z]+)(?:\(([^)]*)\))?:\s*")
 _MILESTONE_PATTERN = re.compile(r"^(release|milestone)(\s|:)|v?\d+\.\d+", re.IGNORECASE)
+# 连续的中日韩字符片段。中文提交没有空格，不能像英文那样按分隔符切词。
+_CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]+")
 
 _STOPWORDS = {
     "the", "a", "an", "and", "or", "for", "with", "to", "of", "in", "on",
@@ -27,6 +29,16 @@ _STOPWORDS = {
     "fixing", "fixed", "bug", "bugfix", "refactor", "refactoring", "make",
     "making", "new", "support", "enable", "enabled", "improve", "improving",
     "page", "pages", "button", "cleanup", "remove", "removed", "use", "using",
+}
+
+# 中文提交里的高频动作词。取 2 字滑窗后，这些词会让两条不相干的提交
+# 因为"都写了新增/修复"而被错并成一个主题，所以按噪音去掉 ——
+# 和英文停用词里已经有 add / fix / update 是同一个道理。
+_CJK_STOPWORDS = {
+    "新增", "添加", "增加", "修复", "修復", "修改", "优化", "调整", "更新",
+    "支持", "完善", "补充", "实现", "删除", "移除", "重构", "整理", "升级",
+    "改进", "提升", "解决", "处理", "完成", "测试", "文档", "配置", "接入",
+    "使用", "改为", "换成", "发布", "版本", "内容", "相关", "问题", "功能",
 }
 
 _KIND_BY_PREFIX = {
@@ -50,6 +62,27 @@ def _subject_tokens(subject: str) -> set[str]:
         for token in re.findall(r"[a-z0-9]+", lowered)
         if len(token) >= 3 and token not in _STOPWORDS
     }
+    tokens |= _cjk_tokens(lowered)
+    return tokens
+
+
+def _cjk_tokens(text: str) -> set[str]:
+    """把中文片段切成 2 字滑窗词元。
+
+    为什么不引入 jieba 之类的分词器：V1 要零依赖、结果可复现，而聚类
+    只需要判断"两条提交是不是在聊同一件事"，bigram 这种粗粒度已经够用；
+    滑窗切出来的"增菜"这类碎片会被停用词和"取交集"的规则稀释掉。
+    """
+
+    tokens: set[str] = set()
+    for run in _CJK_PATTERN.findall(text):
+        if len(run) == 1:
+            tokens.add(run)
+            continue
+        for index in range(len(run) - 1):
+            token = run[index : index + 2]
+            if token not in _CJK_STOPWORDS:
+                tokens.add(token)
     return tokens
 
 
@@ -122,8 +155,7 @@ def cluster_themes(
 
 def _build_theme(theme_number: int, commits: list[CommitEvent]) -> Theme:
     first = commits[0]
-    tokens = _subject_tokens(first.message_subject)
-    title = " ".join(sorted(tokens)) if tokens else first.message_subject
+    title = _theme_title(first.message_subject)
     hashes = tuple(event.hash for event in commits)
     is_milestone = any(
         _is_milestone_subject(event.message_subject) for event in commits
@@ -138,3 +170,18 @@ def _build_theme(theme_number: int, commits: list[CommitEvent]) -> Theme:
         commit_count=len(commits),
         is_milestone_candidate=is_milestone,
     )
+
+
+def _theme_title(subject: str) -> str:
+    """给主题起一个能进提示词的标题。
+
+    英文提交用关键词集合（"login payment"）；中文提交的 bigram 词元拼出来
+    是"接口 推荐 新增"这种碎片，当标题不好读，也会污染 AI 摘要的提示词，
+    所以中文直接用去掉约定前缀的原句。
+    """
+
+    if _CJK_PATTERN.search(subject):
+        cleaned = _CONVENTIONAL_PREFIX.sub("", subject.strip()).strip()
+        return cleaned or subject.strip()
+    tokens = _subject_tokens(subject)
+    return " ".join(sorted(tokens)) if tokens else subject.strip()
