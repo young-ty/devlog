@@ -6,12 +6,14 @@ import contextlib
 import io
 import subprocess
 import sys
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from devlog import __version__
+from devlog.cli import doctor
 from devlog.cli.main import browser_url, build_parser, main
 
 
@@ -46,6 +48,15 @@ class PackagingMetadataTests(unittest.TestCase):
         dynamic = self.metadata["tool"]["setuptools"]["dynamic"]
         self.assertEqual(dynamic["version"]["attr"], "devlog.__version__")
         self.assertEqual(__version__, "0.1.0")
+
+    def test_packaging_extra_is_optional_not_runtime(self) -> None:
+        """PyInstaller 只服务打包，不该混进运行时依赖。"""
+
+        extras = self.metadata["project"]["optional-dependencies"]
+        self.assertIn("package", extras)
+        joined = "\n".join(extras["package"])
+        self.assertIn("pyinstaller==", joined)
+        self.assertNotIn("pyinstaller", "\n".join(self.metadata["project"]["dependencies"]))
 
     def test_readme_file_exists(self) -> None:
         self.assertTrue((ROOT / self.metadata["project"]["readme"]).is_file())
@@ -187,6 +198,134 @@ class ServeOneLinerDocsTests(unittest.TestCase):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("start-devlog.bat", text)
         self.assertIn("127.0.0.1:8000", text)
+
+
+class FrozenEntryTests(unittest.TestCase):
+    """打包成 exe 之后，双击（没有参数）应该直接可用。"""
+
+    def test_frozen_exe_without_args_serves_and_opens_browser(self) -> None:
+        with mock.patch.object(sys, "argv", ["DevLog.exe"]):
+            with mock.patch.object(sys, "frozen", True, create=True):
+                with mock.patch(
+                    "devlog.cli.main.create_app", return_value="fake-app"
+                ):
+                    with mock.patch("devlog.cli.main.uvicorn.run") as uvicorn_run:
+                        with mock.patch(
+                            "devlog.cli.main.schedule_browser_open"
+                        ) as browser:
+                            code = main()
+
+        self.assertEqual(code, 0)
+        browser.assert_called_once_with("http://127.0.0.1:8000")
+        uvicorn_run.assert_called_once()
+
+    def test_source_run_without_args_still_reports_usage(self) -> None:
+        """没打包时不能悄悄变成 serve：脚本里敲 `devlog` 就该提示用法。"""
+
+        buffer = io.StringIO()
+        with mock.patch.object(sys, "argv", ["devlog"]):
+            with contextlib.redirect_stderr(buffer):
+                with self.assertRaises(SystemExit) as context:
+                    main()
+        self.assertEqual(context.exception.code, 2)
+
+
+class DoctorCommandTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tmp.name) / "doctor.db"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_report_covers_every_prerequisite(self) -> None:
+        buffer = io.StringIO()
+        code = doctor.run_doctor(self.db_path, stream=buffer)
+        text = buffer.getvalue()
+
+        for fragment in (
+            "前端产物",
+            "文件夹选择框",
+            "Git",
+            "状态数据库",
+            "大模型",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, text)
+        # 仓库里前端产物是构建好的，所以这里应当是"健康"的
+        self.assertEqual(code, 0)
+        self.assertIn(f"schema v", text)
+
+    def test_missing_frontend_marks_report_unhealthy(self) -> None:
+        with mock.patch(
+            "devlog.cli.doctor.resolve_web_dist", return_value=None
+        ):
+            lines, healthy = doctor.build_report(self.db_path)
+        self.assertFalse(healthy)
+        self.assertTrue(any("前端产物" in line for line in lines))
+
+    def test_missing_git_marks_report_unhealthy(self) -> None:
+        with mock.patch("devlog.cli.doctor.shutil.which", return_value=None):
+            lines, healthy = doctor.build_report(self.db_path)
+        self.assertFalse(healthy)
+        self.assertTrue(any("Git" in line for line in lines))
+
+    def test_unconfigured_llm_is_only_a_warning(self) -> None:
+        with mock.patch(
+            "devlog.cli.doctor.llm_settings",
+            return_value={"configured": "false", "model": "x", "base_url": "y"},
+        ):
+            lines, healthy = doctor.build_report(self.db_path)
+        self.assertTrue(healthy)
+        self.assertTrue(any("--offline" in line for line in lines))
+
+    def test_cli_exposes_doctor_command(self) -> None:
+        args = build_parser().parse_args(["doctor"])
+        self.assertEqual(args.command, "doctor")
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = main(["--db", str(self.db_path), "doctor"])
+        self.assertEqual(code, 0)
+        self.assertIn("DevLog 自检", buffer.getvalue())
+
+    def test_broken_database_marks_report_unhealthy(self) -> None:
+        broken = Path(self.tmp.name) / "broken.db"
+        broken.write_bytes(b"not a sqlite database at all")
+        buffer = io.StringIO()
+        code = doctor.run_doctor(broken, stream=buffer)
+        self.assertEqual(code, 1)
+        self.assertIn("数据库", buffer.getvalue())
+
+
+class PyInstallerBuildTests(unittest.TestCase):
+    """打包配置本身也要有测试：它坏了没人会发现。"""
+
+    def test_spec_bundles_frontend_and_uvicorn_submodules(self) -> None:
+        text = (ROOT / "packaging" / "devlog.spec").read_text(encoding="utf-8")
+        self.assertIn('"devlog/web/dist"', text)
+        self.assertIn('collect_submodules("uvicorn")', text)
+        self.assertIn('name="DevLog"', text)
+        self.assertIn('console=True', text)
+
+    def test_build_script_reuses_spec_and_checks_output(self) -> None:
+        script = ROOT / "build-app.bat"
+        self.assertTrue(script.is_file())
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("packaging\\devlog.spec", text)
+        self.assertIn("dist\\DevLog.exe", text)
+        self.assertIn("pnpm build", text)
+
+    def test_build_script_uses_crlf_and_has_no_bom(self) -> None:
+        raw = (ROOT / "build-app.bat").read_bytes()
+        self.assertFalse(raw.startswith(b"\xef\xbb\xbf"))
+        self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"))
+
+    def test_readme_documents_packaging(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("build-app.bat", text)
+        self.assertIn("dist\\DevLog.exe", text)
+        self.assertIn("devlog doctor", text)
 
 
 if __name__ == "__main__":

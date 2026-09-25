@@ -102,6 +102,28 @@ model = "deepseek-v4-flash"
 
 也可以设置环境变量 `DEEPSEEK_API_KEY`。密钥始终保存在 `~/.devlog/`，不会进入任何 Git 仓库。
 
+### 5. 打包成 exe（可选）
+
+想让 DevLog 变成"拷给别人双击就能用"的程序，双击 `build-app.bat`。
+它会构建前端、调用 PyInstaller，产物是单文件 `dist\DevLog.exe`（约 20MB）：
+
+```powershell
+.\build-app.bat
+dist\DevLog.exe doctor          # 自检：前端产物 / Git / 数据库 / 大模型
+dist\DevLog.exe serve --open    # 等价于双击 exe
+```
+
+这个 exe 自带 Python 运行时和前端产物，**目标机器不需要装 Python，也不需要装 Node**。
+双击它（不带任何参数）等于 `serve --open`：起服务 + 打开浏览器。
+
+几个设计点：
+
+- 前端产物按 `devlog/web/dist` 打进包里，运行时代码用同一个相对路径就能找到，
+  不需要写 `if frozen` 分支；
+- `uvicorn` 用 importlib 动态加载 loop/protocol 实现，静态分析看不到，
+  所以 spec 里显式 `collect_submodules("uvicorn")`；
+- exe 保留控制台窗口：日志看得见，关掉窗口就等于停服务。
+
 ## 测试与质量
 
 ```powershell
@@ -155,3 +177,5 @@ devlog/
 - 端口被占用：换端口启动，例如 `devlog serve --port 9000`；
 - 提示缺少 API key：按上文配置 `~/.devlog/config.toml`，或先使用 `--offline`；
 - rebase / force push 之后历史变化：执行 `devlog scan . --reset` 重建缓存。
+- 界面打不开 / 双击没反应：先跑 `devlog doctor`（打包版是 `dist\DevLog.exe doctor`），
+  它会逐条告诉你前端产物、Git、数据库、大模型配置哪一项没就绪。

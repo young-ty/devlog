@@ -14,6 +14,12 @@ dependencies = [
     "uvicorn[standard]==0.52.4",
 ]
 
+[project.optional-dependencies]
+# 只有"打包成 exe"才需要，所以不放进运行时依赖。
+package = [
+    "pyinstaller==6.22.3",
+]
+
 [project.scripts]
 devlog = "devlog.cli.main:main"
 

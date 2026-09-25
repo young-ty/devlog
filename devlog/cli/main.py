@@ -12,6 +12,7 @@ from pathlib import Path
 import uvicorn
 
 from devlog import __version__
+from devlog.cli import doctor
 from devlog.cli import runner
 from devlog.core.git_source.scanner import GitSourceError
 from devlog.core.llm.base import LLMError
@@ -130,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--text", required=True, help="回答内容（回答会写进对应的板块）"
     )
 
+    sub.add_parser(
+        "doctor",
+        help="自检：前端产物、Git、数据库与大模型配置是否就绪",
+    )
+
     serve_parser = sub.add_parser(
         "serve",
         help="启动本地 API 服务（配合 Web 前端或接口调试）",
@@ -192,11 +198,21 @@ def _print_summary_line(summary) -> None:
 def main(argv: list[str] | None = None) -> int:
     """供 `python -m devlog` 与测试使用的入口。"""
 
+    if argv is None:
+        argv = list(sys.argv[1:])
+        if not argv and getattr(sys, "frozen", False):
+            # 打包成 exe 之后，双击就是最主要的用法：
+            # 不带任何参数时直接启动服务并打开浏览器。
+            argv = ["serve", "--open"]
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
     try:
         db_path = Path(args.db).expanduser() if args.db else None
+
+        if args.command == "doctor":
+            return doctor.run_doctor(db_path)
 
         if args.command == "serve":
             app = create_app(db_path=db_path)
