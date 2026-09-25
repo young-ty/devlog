@@ -145,6 +145,19 @@ class DevLogDBTests(unittest.TestCase):
         with self.assertRaises(DatabaseError):
             self.db.save_draft_answer(999, 1, "没有这份草稿")
 
+    def test_unreadable_database_releases_file_handle(self) -> None:
+        """文件不是 SQLite 库时要报 DatabaseError，并且不能占着文件不放。"""
+
+        broken = Path(self._tmp.name) / "broken.db"
+        broken.write_bytes(b"this is not a sqlite database")
+
+        with self.assertRaises(DatabaseError) as context:
+            DevLogDB(broken)
+        self.assertIn("无法打开状态数据库", str(context.exception))
+
+        # 句柄泄漏的话，Windows 上这一行会抛 PermissionError
+        broken.unlink()
+
     def test_connection_can_be_used_from_another_thread(self) -> None:
         """FastAPI 依赖与路由可能跑在不同线程，连接必须支持跨线程使用。"""
 

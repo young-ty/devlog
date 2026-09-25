@@ -324,9 +324,18 @@ class DevLogDB:
             timeout=5.0,
             check_same_thread=False,
         )
-        self._conn.execute("PRAGMA foreign_keys = ON")
-        self._ensure_schema()
         self._closed = False
+        try:
+            self._conn.execute("PRAGMA foreign_keys = ON")
+            self._ensure_schema()
+        except sqlite3.DatabaseError as exc:
+            # 文件存在但不是 SQLite 库（或已损坏）时，连接必须自己关掉：
+            # Windows 上句柄没释放，用户连这个坏文件都删不掉。
+            self.close()
+            raise DatabaseError(f"无法打开状态数据库：{exc}") from exc
+        except Exception:
+            self.close()
+            raise
 
     @property
     def schema_version(self) -> int:
