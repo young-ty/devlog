@@ -50,6 +50,14 @@ def test_storage_boundary_and_migration_present(doc: str) -> None:
     assert "不进" in doc or "不放进" in doc or "避免污染" in doc
 
 
+def test_final_document_rules_have_one_implementation(doc: str) -> None:
+    """界面和 Markdown 导出必须共用同一份成稿规则，否则排版会各自漂移。"""
+
+    assert "devlog/core/review/document.py" in doc
+    assert "共用" in doc
+    assert "定稿" in doc
+
+
 def run_all() -> None:
     doc = read_doc()
     for test in (
@@ -58,6 +66,7 @@ def run_all() -> None:
         test_llm_abstraction_present,
         test_claim_source_and_status_model_present,
         test_storage_boundary_and_migration_present,
+        test_final_document_rules_have_one_implementation,
     ):
         test(doc)
         print(f"PASS  {test.__name__}")

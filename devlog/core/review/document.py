@@ -58,6 +58,10 @@ SECTION_HINTS = {
 
 DEFAULT_SECTION_HINT = "本板块暂无可自动填充的内容。"
 
+# 没有章节归属的内容（老草稿的问题就没有 section）需要一个落点，
+# 否则用户填过的回答会在成稿和导出里同时消失。
+EXTRA_SECTION = "其他补充"
+
 
 @dataclass(frozen=True)
 class FinalClaim:
@@ -122,6 +126,9 @@ class FinalDocument:
     # 未通过确认的 AI 推断：不进正文，但要在界面上明确告诉用户有多少条。
     pending: tuple[FinalClaim, ...] = ()
     generation_mode: str = "unknown"
+    # draft / finalized：导出文件要据此说明这份复盘是不是成品。
+    status: str = "draft"
+    finalized_at: datetime | None = None
 
     @property
     def included_count(self) -> int:
@@ -150,7 +157,12 @@ def section_placeholder(
     return SECTION_HINTS.get(section, DEFAULT_SECTION_HINT)
 
 
-def build_final_document(draft: ReviewDraft) -> FinalDocument:
+def build_final_document(
+    draft: ReviewDraft,
+    *,
+    status: str = "draft",
+    finalized_at: datetime | None = None,
+) -> FinalDocument:
     """按章节顺序组装成稿，把没确认的 AI 推断单独收起来。"""
 
     included: dict[str, list[FinalClaim]] = {name: [] for name in SECTION_ORDER}
@@ -196,6 +208,34 @@ def build_final_document(draft: ReviewDraft) -> FinalDocument:
             )
         )
 
+    # 没有章节归属的内容统一收在「其他补充」里：老草稿的引导问题就没有
+    # section，丢在这里总比让用户填过的回答凭空消失强。
+    covered = set(ordered)
+    orphan_answers = tuple(
+        FinalAnswer(
+            question_number=number,
+            question=question.text,
+            answer=question.answer.strip(),
+        )
+        for number, question in enumerate(draft.questions, start=1)
+        if question.answer.strip() and question.section not in covered
+    )
+    orphan_open = tuple(
+        question.text
+        for question in draft.questions
+        if not question.answer.strip() and question.section not in covered
+    )
+    if orphan_answers or orphan_open:
+        sections.append(
+            FinalSection(
+                title=EXTRA_SECTION,
+                icon="note",
+                answers=orphan_answers,
+                open_questions=orphan_open,
+                hint="这些补充没有归属章节，暂时收在这里。",
+            )
+        )
+
     return FinalDocument(
         title=f"{draft.project_name} · 开发复盘",
         project_name=draft.project_name,
@@ -205,4 +245,6 @@ def build_final_document(draft: ReviewDraft) -> FinalDocument:
         sections=tuple(sections),
         pending=tuple(pending),
         generation_mode=draft.generation_mode,
+        status=status,
+        finalized_at=finalized_at,
     )

@@ -152,6 +152,24 @@ class CLIFlowTests(unittest.TestCase):
         self.assertEqual(target.parent.name, "retrospectives")
         self.assertEqual(target.parent.parent.name, "docs")
 
+    def test_export_after_finalize_marks_the_file_as_final(self) -> None:
+        """定稿后重新导出同一个文件，文首状态要从"进行中"变成"已定稿"。"""
+
+        with DevLogDB(self.db_path) as db:
+            runner.cmd_init(db, self.repo)
+            runner.cmd_scan(db, self.repo)
+            runner.cmd_review_generate(db, self.repo, offline=True)
+            draft_id = runner.cmd_review_list(db, self.repo)[0].draft_id
+
+            before = runner.cmd_review_export(db, draft_id)
+            self.assertNotIn("已定稿", before.read_text(encoding="utf-8"))
+
+            runner.cmd_review_finalize(db, draft_id)
+            after = runner.cmd_review_export(db, draft_id)
+
+        self.assertEqual(after, before)
+        self.assertIn("已定稿", after.read_text(encoding="utf-8"))
+
     def test_scan_is_idempotent_and_reset_rebuilds(self) -> None:
         with DevLogDB(self.db_path) as db:
             first = runner.cmd_scan(db, self.repo)

@@ -6,6 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from devlog.core.review.document import (
+    EXTRA_SECTION,
     INCLUDED_STATUSES,
     SECTION_ICONS,
     build_final_document,
@@ -201,6 +202,34 @@ class AnswerTests(unittest.TestCase):
         section = build_final_document(draft).sections[2]
         self.assertEqual(section.answers, ())
         self.assertEqual(section.open_questions, ("如果重做一次会改哪一步？",))
+
+    def test_answer_without_a_section_gets_a_home(self) -> None:
+        """老草稿的问题没有章节归属，回答不能在成稿里凭空消失。"""
+
+        draft = make_draft(
+            questions=[
+                ReviewQuestion(text="老问题：这段时间在忙什么？", answer="在赶投递。")
+            ]
+        )
+        document = build_final_document(draft)
+        extra = document.sections[-1]
+        self.assertEqual(extra.title, EXTRA_SECTION)
+        self.assertEqual(extra.answers[0].answer, "在赶投递。")
+        self.assertEqual(document.included_count, 0)
+
+    def test_unanswered_question_without_a_section_is_still_visible(self) -> None:
+        draft = make_draft(questions=[ReviewQuestion(text="老问题二")])
+        extra = build_final_document(draft).sections[-1]
+        self.assertEqual(extra.title, EXTRA_SECTION)
+        self.assertEqual(extra.open_questions, ("老问题二",))
+
+    def test_document_carries_finalize_state(self) -> None:
+        sealed = build_final_document(
+            make_draft(), status="finalized", finalized_at=at(25, 20)
+        )
+        self.assertEqual(sealed.status, "finalized")
+        self.assertEqual(sealed.finalized_at, at(25, 20))
+        self.assertEqual(build_final_document(make_draft()).status, "draft")
 
     def test_section_count_includes_answers_and_claims(self) -> None:
         draft = make_draft(

@@ -219,6 +219,56 @@ class MarkdownExportTests(unittest.TestCase):
             with self.assertRaises(ReviewExportError):
                 write_markdown(self._draft(), Path(tmp))
 
+    def test_finalized_draft_says_so_in_the_header(self) -> None:
+        """定稿前后导出的是同一份草稿，但文首状态必须跟着变。"""
+
+        text = export_markdown(
+            self._draft(), status="finalized", finalized_at=at(3)
+        )
+        self.assertIn("已定稿", text)
+        self.assertIn("2026-09-03", text)
+        self.assertNotIn("进行中", text)
+
+    def test_write_markdown_forwards_finalize_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "final.md"
+            written = write_markdown(
+                self._draft(), target, status="finalized", finalized_at=at(3)
+            )
+            text = written.read_text(encoding="utf-8")
+            self.assertIn("已定稿", text)
+
+    def test_export_lists_every_section_in_a_toc_line(self) -> None:
+        """文首目录行用图标引导，读的人一眼看到这份复盘覆盖了哪些板块。"""
+
+        text = export_markdown(self._draft())
+        toc = next(
+            line for line in text.splitlines() if line.startswith("**目录**")
+        )
+        self.assertIn("**目录**", toc)
+        self.assertIn("📄 项目概述", toc)
+        self.assertIn("🔀 开发时间线", toc)
+
+    def test_finalized_export_summarises_pending_instead_of_dumping_it(self) -> None:
+        """定稿导出是拿去给别人看的成稿，不能把几十条 AI 猜测一起倒出来。"""
+
+        draft = self._draft()
+        pending = [
+            claim.text
+            for claim in draft.claims
+            if claim.status is ClaimStatus.AI_PENDING
+        ]
+        self.assertTrue(pending, "样例草稿应当含有待确认的 AI 推断")
+
+        draft_text = export_markdown(draft)
+        self.assertIn(pending[0], draft_text)
+
+        final_text = export_markdown(
+            draft, status="finalized", finalized_at=at(3)
+        )
+        self.assertNotIn(pending[0], final_text)
+        self.assertIn(f"共 {len(pending)} 条 AI 推断未通过确认", final_text)
+
 
 class GuidanceQuestionTests(unittest.TestCase):
     """引导问题要精简、要落到具体板块，且不再问已经能自动拿到的东西。"""
@@ -402,7 +452,9 @@ class AnswerExportTests(unittest.TestCase):
             ReviewQuestion(text="老问题二", answer=""),
         ]
         text = export_markdown(draft)
-        self.assertIn("## 其他补充（人机共创）", text)
+        # 老草稿没有 section 的回答统一收进「其他补充」，标题和界面上一致。
+        self.assertIn("## 其他补充", text)
+        self.assertNotIn("## 其他补充（人机共创）", text)
         self.assertIn("在赶秋招投递。", text)
         self.assertNotIn("老问题：这段时间在忙什么？", text.split("## 待补充的问题")[0])
 

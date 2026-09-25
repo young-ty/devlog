@@ -548,7 +548,12 @@ def cmd_review_export(
         raise CLIUsageError(f"草稿 {draft_id} 没有可导出的内容")
 
     target = Path(output) if output is not None else _default_export_path(record)
-    written = write_markdown(record.draft, target)
+    written = write_markdown(
+        record.draft,
+        target,
+        status=record.status,
+        finalized_at=record.finalized_at,
+    )
     db.mark_draft_exported(draft_id, written)
     return written
 

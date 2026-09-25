@@ -80,7 +80,9 @@ V1 不包含 Bug 现场捕获、开发中批注、复盘定稿（V2/V3）。坑�
 
 - 组装复盘草稿（项目概述/时间线/技术决策/问题与解决/踩坑/可复用资产/遗留与下一步）；
 - 管理论断状态机：`fact`（Git 事实）→ `ai_pending`（AI 推断待确认）→ `confirmed` / `edited`（用户确认或修改）；
-- 导出 Markdown 到被扫描项目仓库的 `docs/retrospectives/`。
+- 成稿规则（哪些论断算数、章节顺序、空章节怎么提示）只有一份实现（`devlog/core/review/document.py`），界面阅读视图与 Markdown 导出共用，避免两边排版各自漂移；
+- 草稿可标记「定稿 / 撤回定稿」，作为"这份我认了"的显式状态；
+- 导出 Markdown 到被扫描项目仓库的 `docs/retrospectives/`：导出是次要出口，只收已确认内容，定稿后导出在文末只交代未确认条数，不倾倒 AI 猜测。
 
 ### 4.5 presentation（CLI / API / Web）
 
