@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   captureBug,
   deleteBug,
@@ -14,6 +14,8 @@ interface BugsPageProps {
   projectName: string;
   projectPath: string;
   onBack: () => void;
+  /** 从当天小结跳进来时要定位的那条 Bug；普通进入时为空。 */
+  focusBugId?: number | null;
 }
 
 interface BugDraft {
@@ -31,6 +33,7 @@ export function BugsPage({
   projectName,
   projectPath,
   onBack,
+  focusBugId = null,
 }: BugsPageProps) {
   const [bugs, setBugs] = useState<BugRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<number, BugDraft>>({});
@@ -44,6 +47,8 @@ export function BugsPage({
   const [capturing, setCapturing] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [busyBugId, setBusyBugId] = useState<number | null>(null);
+  // 只在刚跳进来时定位一次：之后用户自己改状态、重新排序都不该再被拽走。
+  const focusedOnce = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +86,22 @@ export function BugsPage({
       cancelled = true;
     };
   }, [projectId]);
+
+  // 从当天小结点进来：先把筛选切回"全部"（否则这条可能被筛掉），
+  // 再滚到它跟前。只做一次，之后用户自己操作不该被反复拽走。
+  useEffect(() => {
+    if (focusBugId === null || loading || focusedOnce.current) {
+      return;
+    }
+    if (!bugs.some((bug) => bug.id === focusBugId)) {
+      return;
+    }
+    focusedOnce.current = true;
+    setFilter("all");
+    document
+      .getElementById(`bug-${focusBugId}`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusBugId, loading, bugs]);
 
   function applyUpdatedBug(updated: BugRecord) {
     setBugs((prev) =>
@@ -314,7 +335,13 @@ export function BugsPage({
             solution: bug.solution,
           };
           return (
-            <div key={bug.id} className="bug-card">
+            <div
+              key={bug.id}
+              id={`bug-${bug.id}`}
+              className={
+                bug.id === focusBugId ? "bug-card bug-card-focus" : "bug-card"
+              }
+            >
               <div className="item-top">
                 <div>
                   <div className="item-title">#{bug.id} {bug.title}</div>

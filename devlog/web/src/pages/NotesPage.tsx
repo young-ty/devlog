@@ -19,6 +19,8 @@ interface NotesPageProps {
   projectName: string;
   projectPath: string;
   onBack: () => void;
+  /** 当天小结里的 Bug 点一下就跳过去：看完现场才好补根因。 */
+  onOpenBug: (bugId: number) => void;
 }
 
 function todayISO(): string {
@@ -34,6 +36,7 @@ export function NotesPage({
   projectName,
   projectPath,
   onBack,
+  onOpenBug,
 }: NotesPageProps) {
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [summary, setSummary] = useState("");
@@ -279,15 +282,23 @@ export function NotesPage({
                   </li>
                 ))}
                 {digest.bugs.map((bug) => (
-                  <li key={`bug-${bug.id}`} className="digest-row">
-                    <Icon name="bug" className="digest-icon" />
-                    <span className="digest-time mono">
-                      {bug.captured_at ? formatClockTime(bug.captured_at) : "—"}
-                    </span>
-                    <span className="digest-subject">{bug.title}</span>
-                    <span className={`badge badge-${bug.status}`}>
-                      {BUG_STATUS_LABELS[bug.status]}
-                    </span>
+                  <li key={`bug-${bug.id}`}>
+                    {/* Bug 一行里只够放现场的花名册；要补根因得回 Bug 页面，
+                        所以这一行是可点开的入口，不是纯展示。 */}
+                    <button
+                      type="button"
+                      className="digest-row digest-row-link"
+                      onClick={() => onOpenBug(bug.id)}
+                    >
+                      <Icon name="bug" className="digest-icon" />
+                      <span className="digest-time mono">
+                        {bug.captured_at ? formatClockTime(bug.captured_at) : "—"}
+                      </span>
+                      <span className="digest-subject">{bug.title}</span>
+                      <span className={`badge badge-${bug.status}`}>
+                        {BUG_STATUS_LABELS[bug.status]}
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>

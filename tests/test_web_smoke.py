@@ -352,6 +352,29 @@ class DayDigestBindingTests(unittest.TestCase):
         for selector in (".digest-stats", ".digest-list", ".digest-row"):
             self.assertIn(selector, styles, f"missing style: {selector}")
 
+    def test_bugs_can_be_opened_from_the_digest(self) -> None:
+        """当天小结里看到的 Bug 要能点回 Bug 页，并定位到那一条。"""
+
+        app_text = (WEB_DIR / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertIn("focusBugId", app_text)
+        self.assertIn("onOpenBug", app_text)
+
+        notes_text = (WEB_DIR / "src" / "pages" / "NotesPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("onOpenBug(bug.id)", notes_text)
+        self.assertIn("digest-row-link", notes_text)
+
+        bugs_text = (WEB_DIR / "src" / "pages" / "BugsPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("focusBugId", bugs_text)
+        self.assertIn("scrollIntoView", bugs_text)
+        self.assertIn("bug-card-focus", bugs_text)
+
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".bug-card-focus", styles)
+
 
 if __name__ == "__main__":
     unittest.main()

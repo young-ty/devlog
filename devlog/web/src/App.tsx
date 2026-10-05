@@ -38,6 +38,8 @@ type View =
       projectId: number;
       projectName: string;
       projectPath: string;
+      // 从当天小结点进来时带上要定位的那条 Bug。
+      focusBugId?: number | null;
     };
 
 function TopBar() {
@@ -141,6 +143,15 @@ export default function App() {
         projectId={view.projectId}
         projectName={view.projectName}
         projectPath={view.projectPath}
+        onOpenBug={(bugId) =>
+          setView({
+            name: "bugs",
+            projectId: view.projectId,
+            projectName: view.projectName,
+            projectPath: view.projectPath,
+            focusBugId: bugId,
+          })
+        }
         onBack={() =>
           setView({
             name: "project",
@@ -157,6 +168,7 @@ export default function App() {
         projectId={view.projectId}
         projectName={view.projectName}
         projectPath={view.projectPath}
+        focusBugId={view.focusBugId ?? null}
         onBack={() =>
           setView({
             name: "project",

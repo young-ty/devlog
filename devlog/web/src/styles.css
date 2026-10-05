@@ -997,6 +997,26 @@ button.item-card:focus-visible {
   background: var(--panel-hover);
 }
 
+/* 可点开的行（目前只有 Bug）：整行是按钮，所以要把浏览器默认样式清掉。 */
+button.digest-row-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.digest-row-link .digest-subject {
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.digest-row-link:hover .digest-subject {
+  text-decoration-color: var(--accent);
+}
+
 .digest-icon {
   width: 15px;
   height: 15px;
@@ -1082,6 +1102,12 @@ button.item-card:focus-visible {
 
 .bug-card .item-top {
   margin-bottom: 10px;
+}
+
+/* 从当天小结跳进来的那一条：给个静止的边框提示就够了，
+   不做闪烁动画，免得整页跟着一起跳。 */
+.bug-card-focus {
+  border-color: var(--accent-strong);
 }
 
 .bug-snapshot {
