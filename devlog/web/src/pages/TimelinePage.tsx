@@ -25,6 +25,9 @@ interface TimelinePageProps {
   projectId: number;
   projectName: string;
   projectPath: string;
+  /** 设置里存完密钥后 +1，用来触发重新读一次 AI 配置。 */
+  llmVersion: number;
+  onOpenSettings: () => void;
   onBack: () => void;
 }
 
@@ -62,6 +65,8 @@ export function TimelinePage({
   projectId,
   projectName,
   projectPath,
+  llmVersion,
+  onOpenSettings,
   onBack,
 }: TimelinePageProps) {
   const [timeline, setTimeline] = useState<ProjectTimeline | null>(null);
@@ -96,7 +101,7 @@ export function TimelinePage({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, llmVersion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -487,8 +492,14 @@ export function TimelinePage({
             </div>
             {llmReady === false && (
               <p className="panel-hint" style={{ marginTop: 12 }}>
-                配置 ~/.devlog/config.toml 中的 DeepSeek api_key
-                后即可一键翻译全部提交。
+                接入大模型后即可一键把提交标题翻成中文：
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={onOpenSettings}
+                >
+                  去填写 API Key
+                </button>
               </p>
             )}
           </section>

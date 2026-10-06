@@ -90,7 +90,8 @@ def build_report(db_path: Path | None = None) -> tuple[list[str], bool]:
         )
     else:
         lines.append(
-            f"  {WARN} 大模型：未配置（可先用 --offline 离线生成草稿）"
+            f"  {WARN} 大模型：未配置（在网页顶栏的「大模型设置」里填 Key，"
+            "或先用 --offline 离线生成草稿）"
         )
 
     return lines, healthy

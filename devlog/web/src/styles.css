@@ -24,6 +24,105 @@
   line-height: 1.6;
 }
 
+/* 语义扩展色：上面那组是"面板/文字"的骨架，这一组是状态色和叠加层。
+   明暗两套主题各自覆盖一次，所有组件都只认变量，不再自己写死颜色。 */
+:root {
+  /* 描边：比主色淡，专门用来给徽标和输入框勾边 */
+  --accent-border: rgba(88, 166, 255, 0.35);
+  --accent-border-strong: rgba(88, 166, 255, 0.55);
+  /* 键盘聚焦时的外圈光晕（不是装饰发光，是焦点可见性） */
+  --accent-focus: rgba(47, 129, 247, 0.25);
+  --success-border: rgba(63, 185, 80, 0.32);
+  --success-border-strong: rgba(63, 185, 80, 0.45);
+  --warning-border: rgba(210, 153, 34, 0.35);
+  --warning-wash: rgba(210, 153, 34, 0.05);
+  --danger-border: rgba(248, 81, 73, 0.32);
+  --danger-border-strong: rgba(248, 81, 73, 0.45);
+  /* 中性灰底：标签、次要按钮的底色 */
+  --neutral-soft: rgba(139, 148, 158, 0.16);
+  /* 深色主题下"提亮一点"就是变白，浅色主题下要反过来变深 */
+  --ghost-hover: rgba(255, 255, 255, 0.06);
+  --violet-border: rgba(163, 113, 247, 0.45);
+  --violet-soft: rgba(163, 113, 247, 0.12);
+  /* 时间线横向滚动时两侧的渐隐，终点色必须等于面板色才隐得干净 */
+  --panel-fade: rgba(22, 27, 34, 0);
+  --overlay: rgba(1, 4, 9, 0.62);
+  --shadow: rgba(1, 4, 9, 0.45);
+  --shadow-strong: rgba(1, 4, 9, 0.7);
+  /* 单色强调：文字用的亮色版本，以及按钮按下时的态 */
+  --accent-bright: #79c0ff;
+  --accent-chip: #9ecbff;
+  --accent-hover: #388bfd;
+  --on-accent: #ffffff;
+  --secondary-hover-border: #6e7681;
+  --success-bright: #56d364;
+  --danger-bright: #ff7b72;
+  --danger-text: #ffa198;
+  --warning-bright: #e3b341;
+  --violet: #a371f7;
+  --violet-bright: #d2a8ff;
+  /* 时间线专用：轨道、间隙线、焦点标题 */
+  --tl-line: #3d444d;
+  --tl-track: #2b3138;
+  --tl-title: #f0f6fc;
+}
+
+/* 浅色主题。选择器带上 :root 是为了稳稳压过上面的 :root，
+   免得依赖"谁写在后面"这种一改顺序就翻车的规则。 */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  /* 浅色下输入框用纯白、面板用浅灰：反过来的话输入框会和面板糊成一块 */
+  --bg-deep: #ffffff;
+  --panel: #f6f8fa;
+  --panel-hover: #eef1f4;
+  --border: #d0d7de;
+  --border-strong: #afb8c1;
+  --text: #1f2328;
+  --text-secondary: #424a53;
+  --muted: #656d76;
+  --accent: #0969da;
+  --accent-strong: #0550ae;
+  --accent-soft: rgba(9, 105, 218, 0.1);
+  --success: #1a7f37;
+  --success-soft: rgba(26, 127, 55, 0.12);
+  --warning: #9a6700;
+  --warning-soft: rgba(154, 103, 0, 0.14);
+  --danger: #cf222e;
+  --danger-soft: rgba(207, 34, 46, 0.1);
+  --accent-border: rgba(9, 105, 218, 0.35);
+  --accent-border-strong: rgba(9, 105, 218, 0.5);
+  --accent-focus: rgba(9, 105, 218, 0.18);
+  --success-border: rgba(26, 127, 55, 0.35);
+  --success-border-strong: rgba(26, 127, 55, 0.5);
+  --warning-border: rgba(154, 103, 0, 0.35);
+  --warning-wash: rgba(154, 103, 0, 0.06);
+  --danger-border: rgba(207, 34, 46, 0.32);
+  --danger-border-strong: rgba(207, 34, 46, 0.5);
+  --neutral-soft: rgba(101, 109, 118, 0.12);
+  --ghost-hover: rgba(31, 35, 40, 0.06);
+  --violet-border: rgba(130, 80, 223, 0.4);
+  --violet-soft: rgba(130, 80, 223, 0.1);
+  --panel-fade: rgba(246, 248, 250, 0);
+  --overlay: rgba(31, 35, 40, 0.45);
+  --shadow: rgba(31, 35, 40, 0.12);
+  --shadow-strong: rgba(31, 35, 40, 0.22);
+  --accent-bright: #0550ae;
+  --accent-chip: #0969da;
+  --accent-hover: #0969da;
+  --on-accent: #ffffff;
+  --secondary-hover-border: #8c959f;
+  --success-bright: #1a7f37;
+  --danger-bright: #cf222e;
+  --danger-text: #cf222e;
+  --warning-bright: #9a6700;
+  --violet: #8250df;
+  --violet-bright: #6639ba;
+  --tl-line: #d8dee4;
+  --tl-track: #eaeef2;
+  --tl-title: #1f2328;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -100,7 +199,7 @@ button {
   display: grid;
   place-items: center;
   background: var(--accent-soft);
-  border: 1px solid rgba(88, 166, 255, 0.35);
+  border: 1px solid var(--accent-border);
   color: var(--accent);
   font-weight: 700;
   font-size: 15px;
@@ -138,6 +237,125 @@ button {
   background: var(--success);
 }
 
+/* ---------- 顶栏操作区：主题切换 + 设置 ---------- */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 纯图标按钮：只有图标，靠 title / aria-label 说明自己是什么。 */
+.icon-button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* 正文里的按钮式链接：看起来像链接，语义上还是 button。 */
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.link-button:hover:not(:disabled) {
+  background: none;
+  color: var(--accent-bright);
+}
+
+code {
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ---------- 设置弹窗 ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--overlay);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 64px 20px 32px;
+  overflow-y: auto;
+}
+
+.modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px var(--shadow-strong);
+  padding: 18px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal .form-hint {
+  margin: 0 0 12px;
+}
+
+.modal .form-grid {
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.settings-status {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-deep);
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.settings-status code {
+  color: var(--accent-bright);
+  word-break: break-all;
+}
+
 /* ---------- typography & page headers ---------- */
 
 .page-head {
@@ -170,7 +388,7 @@ button {
 }
 
 .back-link:hover {
-  color: #79c0ff;
+  color: var(--accent-bright);
 }
 
 h2 {
@@ -257,8 +475,8 @@ div.item-card:focus-visible {
 }
 
 .item-delete:hover:not(:disabled) {
-  border-color: #f85149;
-  color: #f85149;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .item-delete:disabled {
@@ -333,15 +551,15 @@ div.item-card:focus-visible {
 }
 
 .error {
-  color: #ffa198;
+  color: var(--danger-text);
   background: var(--danger-soft);
-  border: 1px solid rgba(248, 81, 73, 0.32);
+  border: 1px solid var(--danger-border);
 }
 
 .success {
-  color: #56d364;
+  color: var(--success-bright);
   background: var(--success-soft);
-  border: 1px solid rgba(63, 185, 80, 0.32);
+  border: 1px solid var(--success-border);
 }
 
 /* ---------- forms & actions ---------- */
@@ -388,14 +606,14 @@ input::placeholder {
 input:focus {
   outline: none;
   border-color: var(--accent-strong);
-  box-shadow: 0 0 0 3px rgba(47, 129, 247, 0.25);
+  box-shadow: 0 0 0 3px var(--accent-focus);
 }
 
 button {
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--accent-strong);
-  color: #ffffff;
+  color: var(--on-accent);
   padding: 8px 14px;
   font-size: 14px;
   font-weight: 500;
@@ -404,7 +622,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #388bfd;
+  background: var(--accent-hover);
 }
 
 button:disabled {
@@ -421,7 +639,7 @@ button.secondary {
 button.secondary:hover:not(:disabled) {
   background: var(--panel-hover);
   color: var(--text);
-  border-color: #6e7681;
+  border-color: var(--secondary-hover-border);
 }
 
 .actions {
@@ -507,7 +725,7 @@ button.secondary:hover:not(:disabled) {
 }
 
 .claim-sources code {
-  background: rgba(139, 148, 158, 0.14);
+  background: var(--neutral-soft);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 6px;
@@ -557,31 +775,31 @@ button.secondary:hover:not(:disabled) {
 
 .badge-fact {
   background: var(--success-soft);
-  color: #56d364;
-  border: 1px solid rgba(63, 185, 80, 0.32);
+  color: var(--success-bright);
+  border: 1px solid var(--success-border);
 }
 
 .badge-ai_pending {
   background: var(--warning-soft);
-  color: #e3b341;
-  border: 1px solid rgba(210, 153, 34, 0.35);
+  color: var(--warning-bright);
+  border: 1px solid var(--warning-border);
 }
 
 .badge-confirmed {
   background: var(--accent-soft);
-  color: #79c0ff;
-  border: 1px solid rgba(88, 166, 255, 0.35);
+  color: var(--accent-bright);
+  border: 1px solid var(--accent-border);
 }
 
 .badge-edited {
-  background: rgba(139, 148, 158, 0.16);
+  background: var(--neutral-soft);
   color: var(--text-secondary);
   border: 1px solid var(--border-strong);
 }
 
 /* 旧版本生成的草稿：没有可复用资产归纳，用中性灰标出来 */
 .badge-legacy {
-  background: rgba(139, 148, 158, 0.16);
+  background: var(--neutral-soft);
   color: var(--text-secondary);
   border: 1px dashed var(--border-strong);
 }
@@ -590,31 +808,31 @@ button.secondary:hover:not(:disabled) {
 .badge-finalized {
   background: var(--success-soft);
   color: var(--success);
-  border: 1px solid rgba(63, 185, 80, 0.45);
+  border: 1px solid var(--success-border-strong);
 }
 
 .badge-open {
   background: var(--warning-soft);
-  color: #e3b341;
-  border: 1px solid rgba(210, 153, 34, 0.35);
+  color: var(--warning-bright);
+  border: 1px solid var(--warning-border);
 }
 
 .badge-root_cause_found {
   background: var(--accent-soft);
-  color: #79c0ff;
-  border: 1px solid rgba(88, 166, 255, 0.35);
+  color: var(--accent-bright);
+  border: 1px solid var(--accent-border);
 }
 
 .badge-resolved {
   background: var(--success-soft);
-  color: #56d364;
-  border: 1px solid rgba(63, 185, 80, 0.32);
+  color: var(--success-bright);
+  border: 1px solid var(--success-border);
 }
 
 .progress {
   height: 6px;
   border-radius: 999px;
-  background: rgba(139, 148, 158, 0.18);
+  background: var(--neutral-soft);
   overflow: hidden;
   margin-top: 8px;
 }
@@ -724,7 +942,7 @@ button.secondary:hover:not(:disabled) {
 .question-card textarea:focus {
   outline: none;
   border-color: var(--accent-strong);
-  box-shadow: 0 0 0 3px rgba(47, 129, 247, 0.25);
+  box-shadow: 0 0 0 3px var(--accent-focus);
 }
 
 .question-actions {
@@ -762,7 +980,7 @@ button.secondary:hover:not(:disabled) {
 
 button.back-link:hover:not(:disabled) {
   background: transparent;
-  color: #79c0ff;
+  color: var(--accent-bright);
 }
 
 button.item-card:hover:not(:disabled),
@@ -792,8 +1010,8 @@ button.item-card:focus-visible {
 .theme-kind {
   flex: none;
   background: var(--accent-soft);
-  color: #79c0ff;
-  border: 1px solid rgba(88, 166, 255, 0.3);
+  color: var(--accent-bright);
+  border: 1px solid var(--accent-border);
   border-radius: 999px;
   font-size: 11.5px;
   padding: 2px 10px;
@@ -835,7 +1053,7 @@ button.item-card:focus-visible {
 }
 
 .commit-row.commit-noise {
-  background: rgba(210, 153, 34, 0.05);
+  background: var(--warning-wash);
 }
 
 .commit-meta {
@@ -885,28 +1103,28 @@ button.item-card:focus-visible {
 }
 
 .commit-add {
-  color: #56d364;
+  color: var(--success-bright);
 }
 
 .commit-del {
-  color: #f85149;
+  color: var(--danger);
 }
 
 .badge-noise {
-  background: rgba(139, 148, 158, 0.16);
+  background: var(--neutral-soft);
   color: var(--text-secondary);
   border: 1px solid var(--border-strong);
 }
 
 .badge-milestone {
-  background: rgba(210, 153, 34, 0.16);
-  color: #e3b341;
-  border: 1px solid rgba(210, 153, 34, 0.35);
+  background: var(--warning-soft);
+  color: var(--warning-bright);
+  border: 1px solid var(--warning-border);
 }
 
 .silence-card {
-  border: 1px solid rgba(210, 153, 34, 0.32);
-  background: rgba(210, 153, 34, 0.08);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-wash);
   border-radius: var(--radius);
   padding: 12px 16px;
   margin-bottom: 10px;
@@ -921,7 +1139,7 @@ button.item-card:focus-visible {
 }
 
 .silence-main strong {
-  color: #e3b341;
+  color: var(--warning-bright);
 }
 
 .silence-main span {
@@ -1073,7 +1291,7 @@ button.digest-row-link {
 .notes-form input:focus {
   outline: none;
   border-color: var(--accent-strong);
-  box-shadow: 0 0 0 3px rgba(47, 129, 247, 0.25);
+  box-shadow: 0 0 0 3px var(--accent-focus);
 }
 
 .field-row {
@@ -1130,7 +1348,7 @@ button.digest-row-link {
   color: var(--text-secondary);
   background: var(--bg-deep);
   border: 1px solid var(--border);
-  border-left: 3px solid rgba(248, 81, 73, 0.6);
+  border-left: 3px solid var(--danger-border-strong);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
   margin: 0 0 10px;
@@ -1154,14 +1372,14 @@ button.digest-row-link {
 
 button.danger {
   background: transparent;
-  color: #ff7b72;
-  border: 1px solid rgba(248, 81, 73, 0.45);
+  color: var(--danger-bright);
+  border: 1px solid var(--danger-border-strong);
 }
 
 button.danger:hover:not(:disabled) {
   background: var(--danger-soft);
-  color: #ff7b72;
-  border-color: rgba(248, 81, 73, 0.7);
+  color: var(--danger-bright);
+  border-color: var(--danger-border-strong);
 }
 
 /* ---------- commit annotations ---------- */
@@ -1180,7 +1398,7 @@ button.annotation-toggle {
 }
 
 button.annotation-toggle:hover:not(:disabled) {
-  color: #79c0ff;
+  color: var(--accent-bright);
   border-color: var(--accent-strong);
   background: var(--accent-soft);
 }
@@ -1250,7 +1468,7 @@ button.tiny {
   align-items: flex-start;
   gap: 10px;
   flex-wrap: wrap;
-  border: 1px solid rgba(210, 153, 34, 0.35);
+  border: 1px solid var(--warning-border);
   border-radius: var(--radius);
   background: var(--warning-soft);
   padding: 12px 14px;
@@ -1333,8 +1551,8 @@ button.tiny {
 
 .tl-chip.on {
   background: var(--accent-soft);
-  border-color: rgba(88, 166, 255, 0.55);
-  color: #9ecbff;
+  border-color: var(--accent-border-strong);
+  color: var(--accent-chip);
 }
 
 .tl-chip-count {
@@ -1342,7 +1560,7 @@ button.tiny {
   font-size: 11px;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ghost-hover);
   color: var(--text-secondary);
 }
 
@@ -1396,7 +1614,7 @@ button.tiny {
 
 .rv-seg button.on {
   background: var(--accent-soft);
-  color: #9ecbff;
+  color: var(--accent-chip);
 }
 
 .rv-seg em {
@@ -1449,7 +1667,7 @@ button.tiny {
 
 .rv-toc a.on {
   background: var(--accent-soft);
-  color: #9ecbff;
+  color: var(--accent-chip);
 }
 
 .rv-toc a.rv-toc-empty {
@@ -1502,7 +1720,7 @@ button.tiny {
 }
 
 .rv-claim-pending {
-  border-left-color: rgba(210, 153, 34, 0.5);
+  border-left-color: var(--warning-border);
 }
 
 .rv-meta {
@@ -1524,25 +1742,25 @@ button.tiny {
 
 .rv-chip-fact {
   color: var(--success);
-  border-color: rgba(63, 185, 80, 0.45);
+  border-color: var(--success-border-strong);
   background: var(--success-soft);
 }
 
 .rv-chip-confirmed {
   color: var(--accent);
-  border-color: rgba(88, 166, 255, 0.45);
+  border-color: var(--accent-border-strong);
   background: var(--accent-soft);
 }
 
 .rv-chip-edited {
-  color: #d2a8ff;
-  border-color: rgba(163, 113, 247, 0.45);
-  background: rgba(163, 113, 247, 0.12);
+  color: var(--violet-bright);
+  border-color: var(--violet-border);
+  background: var(--violet-soft);
 }
 
 .rv-chip-ai {
   color: var(--warning);
-  border-color: rgba(210, 153, 34, 0.45);
+  border-color: var(--warning-border);
   background: var(--warning-soft);
 }
 
@@ -1557,10 +1775,10 @@ button.tiny {
   gap: 10px;
   margin: 20px 0 4px;
   padding: 10px 14px;
-  border: 1px dashed rgba(210, 153, 34, 0.45);
+  border: 1px dashed var(--warning-border);
   border-radius: 8px;
   background: var(--warning-soft);
-  color: #e3b341;
+  color: var(--warning-bright);
   font-size: 13px;
 }
 
@@ -1568,7 +1786,7 @@ button.tiny {
   margin-left: auto;
   border: 0;
   background: none;
-  color: #e3b341;
+  color: var(--warning-bright);
   text-decoration: underline;
   cursor: pointer;
   font-size: 13px;
@@ -1650,7 +1868,7 @@ button.tiny {
 
 .rv-badge-done {
   color: var(--success);
-  border-color: rgba(63, 185, 80, 0.5);
+  border-color: var(--success-border-strong);
   background: var(--success-soft);
 }
 
@@ -1712,12 +1930,12 @@ button.tiny {
 
 .tl-fade-left {
   left: 0;
-  background: linear-gradient(90deg, var(--panel), rgba(22, 27, 34, 0));
+  background: linear-gradient(90deg, var(--panel), var(--panel-fade));
 }
 
 .tl-fade-right {
   right: 0;
-  background: linear-gradient(270deg, var(--panel), rgba(22, 27, 34, 0));
+  background: linear-gradient(270deg, var(--panel), var(--panel-fade));
 }
 
 .tl-rail {
@@ -1738,7 +1956,7 @@ button.tiny {
 
 .tl-curve path {
   fill: none;
-  stroke: #3d444d;
+  stroke: var(--tl-line);
   stroke-width: 2;
   stroke-linecap: round;
 }
@@ -1757,7 +1975,7 @@ button.tiny {
 }
 
 .tl-node-annotation {
-  --tl-dot: #a371f7;
+  --tl-dot: var(--violet);
 }
 
 .tl-node-milestone {
@@ -1801,7 +2019,7 @@ button.tiny {
   background: var(--panel-hover);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(1, 4, 9, 0.45);
+  box-shadow: 0 6px 18px var(--shadow);
   transition: border-color 0.16s ease;
 }
 
@@ -1820,7 +2038,7 @@ button.tiny {
   left: 50%;
   width: 1px;
   height: 18px;
-  background: #2b3138;
+  background: var(--tl-track);
 }
 
 .tl-above .tl-card::after {
@@ -1840,12 +2058,12 @@ button.tiny {
 }
 
 .tl-open {
-  border-color: rgba(88, 166, 255, 0.55);
-  box-shadow: 0 10px 30px rgba(1, 4, 9, 0.7);
+  border-color: var(--accent-border-strong);
+  box-shadow: 0 10px 30px var(--shadow-strong);
 }
 
 .tl-clampable:focus-visible {
-  outline: 2px solid rgba(88, 166, 255, 0.7);
+  outline: 2px solid var(--accent-border-strong);
   outline-offset: 2px;
 }
 
@@ -1886,7 +2104,7 @@ button.tiny {
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.45;
-  color: #f0f6fc;
+  color: var(--tl-title);
 }
 
 .tl-body {
@@ -2037,8 +2255,8 @@ button.tiny {
   top: -1px;
   bottom: -1px;
   border-radius: 5px;
-  background: rgba(88, 166, 255, 0.16);
-  border: 1px solid rgba(88, 166, 255, 0.5);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border-strong);
   pointer-events: none;
 }
 

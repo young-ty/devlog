@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import unittest
@@ -29,6 +30,8 @@ class WebSmokeTests(unittest.TestCase):
             "src/pages/TimelinePage.tsx",
             "src/pages/NotesPage.tsx",
             "src/pages/BugsPage.tsx",
+            "src/hooks/useTheme.ts",
+            "src/components/SettingsDialog.tsx",
         ):
             self.assertTrue(
                 (WEB_DIR / relative).exists(),
@@ -319,6 +322,100 @@ class VisualToneTests(unittest.TestCase):
 
     def test_panel_radius_stays_tool_like(self) -> None:
         self.assertIn("--radius: 8px;", self.styles)
+
+
+class ThemeTests(unittest.TestCase):
+    """明暗主题：开关在界面里，颜色全走变量，首屏不能闪。"""
+
+    def test_toggle_is_wired_end_to_end(self) -> None:
+        hook = (WEB_DIR / "src" / "hooks" / "useTheme.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("devlog-theme", hook)
+        self.assertIn("dataset.theme", hook)
+
+        app_text = (WEB_DIR / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertIn("useTheme", app_text)
+        self.assertIn("toggleTheme", app_text)
+        self.assertIn("topbar-actions", app_text)
+
+        # 首屏由内联脚本定主题，否则会先闪一帧深色再变浅色
+        index_text = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn("dataset.theme", index_text)
+        self.assertIn("theme-color", index_text)
+
+    def test_light_theme_overrides_the_whole_palette(self) -> None:
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        marker = ':root[data-theme="light"]'
+        self.assertIn(marker, styles, "缺少浅色主题的变量覆盖块")
+
+        light_block = styles.split(marker, 1)[1]
+        for token in ("color-scheme: light;", "--bg: #ffffff;", "--text: #1f2328;"):
+            self.assertIn(token, light_block, f"浅色主题缺少 {token}")
+
+        # 颜色字面量只能出现在变量定义里（--xxx: #hex / rgba(...)）。
+        # 组件里写死一个颜色，浅色主题下就会花一块。
+        leaked = [
+            line.strip()
+            for line in styles.splitlines()
+            if (re.search(r"#[0-9a-fA-F]{3,8}\b", line) or "rgba(" in line)
+            and not line.strip().startswith("--")
+        ]
+        self.assertEqual(leaked, [], f"仍有写死的颜色：{leaked}")
+
+    def test_toolbar_controls_have_styles(self) -> None:
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        for selector in (".topbar-actions", ".icon-button", ".link-button"):
+            self.assertIn(selector, styles, f"缺少样式：{selector}")
+
+
+class LLMSettingsUiTests(unittest.TestCase):
+    """大模型接入入口：填 key、测连通、保存，全在网页里完成。"""
+
+    def test_api_bindings_exist(self) -> None:
+        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
+        for name in ("updateLLMConfig", "testLLMConfig"):
+            self.assertIn(f"export function {name}(", api_text)
+        self.assertIn("/api/llm/config/test", api_text)
+
+        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
+        for token in (
+            "LLMConfigUpdate",
+            "LLMConfigTestResult",
+            "api_key_hint",
+            "key_source",
+            "clear_api_key",
+        ):
+            self.assertIn(token, types_text, f"类型缺少 {token}")
+
+    def test_settings_dialog_is_safe_and_complete(self) -> None:
+        dialog = (
+            WEB_DIR / "src" / "components" / "SettingsDialog.tsx"
+        ).read_text(encoding="utf-8")
+        for token in (
+            'type="password"',
+            'autoComplete="off"',
+            "测试连接",
+            "clear_api_key",
+            "updateLLMConfig",
+            "testLLMConfig",
+        ):
+            self.assertIn(token, dialog, f"设置弹窗缺少 {token}")
+
+    def test_topbar_opens_the_settings_dialog(self) -> None:
+        app_text = (WEB_DIR / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertIn("SettingsDialog", app_text)
+        self.assertIn("onOpenSettings", app_text)
+        # 存完密钥要让页面重新读一次配置，否则按钮还是灰的
+        self.assertIn("llmVersion", app_text)
+
+    def test_pages_point_at_the_dialog_instead_of_a_hand_edited_file(self) -> None:
+        for name in ("ProjectPage.tsx", "TimelinePage.tsx"):
+            text = (WEB_DIR / "src" / "pages" / name).read_text(encoding="utf-8")
+            self.assertIn("onOpenSettings", text, f"{name} 没有设置入口")
+            self.assertIn("去填写 API Key", text, f"{name} 缺少引导文案")
+            # 让零基础用户自己去改 ~/.devlog/config.toml 是反人性的
+            self.assertNotIn("config.toml", text, f"{name} 仍在让用户手改配置文件")
 
 
 class DayDigestBindingTests(unittest.TestCase):

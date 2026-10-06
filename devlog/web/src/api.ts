@@ -17,6 +17,8 @@ import type {
   GenerateResult,
   InitResult,
   LLMConfig,
+  LLMConfigTestResult,
+  LLMConfigUpdate,
   Project,
   ProjectTimeline,
   ReviewDraft,
@@ -117,6 +119,23 @@ export function getProjectTimeline(
 
 export function getLLMConfig(): Promise<LLMConfig> {
   return request<LLMConfig>("/api/llm/config");
+}
+
+/** 把网页上填的 API Key / 模型 / 接口地址写进本机配置文件。 */
+export function updateLLMConfig(
+  payload: LLMConfigUpdate,
+): Promise<LLMConfig> {
+  return request<LLMConfig>("/api/llm/config", jsonInit("PUT", payload));
+}
+
+/** 试一次 /models 看 key 和地址通不通，不产生生成费用。 */
+export function testLLMConfig(
+  payload: LLMConfigUpdate = {},
+): Promise<LLMConfigTestResult> {
+  return request<LLMConfigTestResult>(
+    "/api/llm/config/test",
+    jsonInit("POST", payload),
+  );
 }
 
 /** 拉取合并好的时间线事件流（提交、Bug、笔记、批注、里程碑、空档）。 */

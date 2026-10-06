@@ -15,6 +15,8 @@ DevLog 是面向个人开发者的**本地开发复盘工具**：扫描 Git 仓�
 - AI 摘要逐条附 commit 来源，降低幻觉风险；
 - 复盘草稿区分“事实”与“AI 待确认”，支持逐条确认/补充后导出；
 - 复盘成稿：只有确认过的内容才进正文，界面里读、可定稿归档、也可以导出 Markdown；
+- 深色 / 浅色双主题，一键切换并记住选择；
+- 大模型接入就在网页里：顶栏齿轮 → 填 API Key → 测试连接 → 保存，不用手改配置文件；
 - 内置离线评测集，用人工 golden set 量化摘要质量。
 
 ## 技术栈
@@ -97,14 +99,18 @@ pnpm dev
 
 ### 4. 配置 DeepSeek（可选）
 
-创建 `%USERPROFILE%\.devlog\config.toml`：
+打开网页后点顶栏的齿轮图标，在「大模型设置」里填 API Key，点「测试连接」
+确认能通，再点「保存」即可。密钥只写进本机的 `%USERPROFILE%\.devlog\config.toml`，
+不进数据库、也不会进入任何 Git 仓库；界面上只回显 `sk-1****abcd` 这样的掩码。
+
+习惯手改配置的话，直接创建 `%USERPROFILE%\.devlog\config.toml` 也一样有效：
 
 ```toml
 api_key = "sk-你的密钥"
 model = "deepseek-v4-flash"
 ```
 
-也可以设置环境变量 `DEEPSEEK_API_KEY`。密钥始终保存在 `~/.devlog/`，不会进入任何 Git 仓库。
+也可以设置环境变量 `DEEPSEEK_API_KEY`（优先级最高）。
 
 ### 5. 打包成 exe（可选）
 
@@ -185,7 +191,9 @@ devlog/
 ## 常见问题
 
 - 端口被占用：换端口启动，例如 `devlog serve --port 9000`；
-- 提示缺少 API key：按上文配置 `~/.devlog/config.toml`，或先使用 `--offline`；
+- 提示缺少 API key：点界面顶栏的齿轮图标填写，或按上文手改 `~/.devlog/config.toml`，
+  也可以先使用 `--offline` 生成离线草稿；
+- 看久了觉得刺眼 / 想要浅色：点顶栏的太阳/月亮图标切换主题，选择会被记住；
 - rebase / force push 之后历史变化：执行 `devlog scan . --reset` 重建缓存。
 - 界面打不开 / 双击没反应：先跑 `devlog doctor`（打包版是 `dist\DevLog.exe doctor`），
   它会逐条告诉你前端产物、Git、数据库、大模型配置哪一项没就绪。

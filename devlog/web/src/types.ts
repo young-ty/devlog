@@ -86,6 +86,28 @@ export interface LLMConfig {
   configured: boolean;
   model: string;
   base_url: string;
+  /** 密钥掩码，例如 sk-1****abcd；绝不返回明文。 */
+  api_key_hint: string;
+  /** env = 环境变量，file = 本地配置文件，none = 还没配。 */
+  key_source: LLMKeySource;
+  /** 密钥写在哪，界面上告诉用户"东西存哪儿了"。 */
+  config_path: string;
+}
+
+export type LLMKeySource = "env" | "file" | "none";
+
+/** 保存大模型设置。字段留空表示"这一项不改"。 */
+export interface LLMConfigUpdate {
+  api_key?: string;
+  model?: string;
+  base_url?: string;
+  /** 单独清除已保存的密钥。 */
+  clear_api_key?: boolean;
+}
+
+export interface LLMConfigTestResult {
+  ok: boolean;
+  message: string;
 }
 
 export interface GenerateResult {

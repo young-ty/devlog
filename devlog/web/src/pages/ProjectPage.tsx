@@ -13,6 +13,9 @@ interface ProjectPageProps {
   projectId: number;
   projectName: string;
   projectPath: string;
+  /** 设置里存完密钥后 +1，用来触发重新读一次 AI 配置。 */
+  llmVersion: number;
+  onOpenSettings: () => void;
   onBack: () => void;
   onOpenTimeline: () => void;
   onOpenReview: (draftId: number) => void;
@@ -24,6 +27,8 @@ export function ProjectPage({
   projectId,
   projectName,
   projectPath,
+  llmVersion,
+  onOpenSettings,
   onBack,
   onOpenTimeline,
   onOpenReview,
@@ -79,7 +84,7 @@ export function ProjectPage({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, llmVersion]);
 
   async function handleScan(reset: boolean) {
     setBusy(true);
@@ -244,8 +249,14 @@ export function ProjectPage({
         </div>
         {llmReady === false && (
           <p className="panel-hint" style={{ marginTop: 12 }}>
-            AI 模式需要 DeepSeek key：在 ~/.devlog/config.toml 中填写
-            api_key（或设置环境变量 DEEPSEEK_API_KEY）。
+            AI 模式需要先接入大模型：
+            <button
+              type="button"
+              className="link-button"
+              onClick={onOpenSettings}
+            >
+              去填写 API Key
+            </button>
           </p>
         )}
         <p className="panel-hint" style={{ marginTop: 12 }}>

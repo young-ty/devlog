@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DevLog</title>
     <meta name="theme-color" content="#0d1117" />
+    <script>
+      // 首屏就定好明暗，避免"先黑一帧再变白"。逻辑与 src/hooks/useTheme.ts
+      // 保持一致；改动主题名或存储键时两边都要动。
+      (function () {
+        var theme = "dark";
+        try {
+          if (localStorage.getItem("devlog-theme") === "light") {
+            theme = "light";
+          }
+        } catch (error) {
+          theme = "dark";
+        }
+        document.documentElement.dataset.theme = theme;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute("content", theme === "light" ? "#ffffff" : "#0d1117");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
