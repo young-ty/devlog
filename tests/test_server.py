@@ -10,9 +10,11 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from devlog.core.llm.deepseek import load_local_config
 from devlog.core.storage.database import DevLogDB
 from devlog.core.review.models import SECTION_ORDER
 from devlog.server.app import create_app
@@ -971,6 +973,134 @@ class DayDigestAPITests(unittest.TestCase):
                 "/api/projects/999/digest", params={"date": "2026-09-10"}
             )
         self.assertEqual(response.status_code, 404)
+
+
+class LLMConfigAPITests(unittest.TestCase):
+    """网页端配置大模型：能存、能测，且只有本机能改。
+
+    配置文件指向临时目录（DEVLOG_CONFIG_PATH），绝不碰用户真实的
+    ~/.devlog/config.toml；探活函数注入假实现，测试不发网络请求。
+    """
+
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root)
+        self.db_path = Path(self.root) / "llm-api.db"
+        commit(self.repo, "login.py", "def login(): ...\n", "feat: add login page", at(1))
+        self.config_path = Path(self.root) / "config.toml"
+        env_patch = patch.dict(
+            os.environ,
+            {
+                "DEVLOG_CONFIG_PATH": str(self.config_path),
+                # 明确清空，免得开发机上的真实环境变量把断言带偏
+                "DEEPSEEK_API_KEY": "",
+            },
+        )
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+
+        self.probes: list[tuple[str, str]] = []
+
+        def fake_probe(api_key: str, base_url: str) -> tuple[bool, str]:
+            self.probes.append((api_key, base_url))
+            return True, "连接正常"
+
+        self.app = create_app(self.db_path, llm_probe=fake_probe)
+
+    @property
+    def loopback(self) -> tuple[str, int]:
+        """TestClient 默认来源是主机名 testclient，会被本机守卫挡掉；
+        真实浏览器走的是 127.0.0.1，测试按真实来源模拟。"""
+
+        return ("127.0.0.1", 51234)
+
+    def tearDown(self) -> None:
+        force_remove(self.root)
+
+    def test_saving_a_key_switches_ai_on_without_leaking_the_key(self) -> None:
+        key = "sk-1234567890abcd"
+        with TestClient(self.app, client=self.loopback) as client:
+            response = client.put(
+                "/api/llm/config",
+                json={"api_key": key, "model": "deepseek-chat"},
+            )
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertTrue(body["configured"])
+            self.assertEqual(body["model"], "deepseek-chat")
+            self.assertEqual(body["key_source"], "file")
+            self.assertEqual(body["api_key_hint"], "sk-1****abcd")
+            # 响应的任何一个字节里都不该出现明文密钥
+            self.assertNotIn(key, response.text)
+
+            reloaded = client.get("/api/llm/config").json()
+        self.assertTrue(reloaded["configured"])
+        # 密钥确实落到了本机配置文件，AI 调用才拿得到
+        self.assertEqual(load_local_config(self.config_path)["api_key"], key)
+
+    def test_blank_fields_do_not_erase_saved_settings(self) -> None:
+        """用户只改模型名时，已经存好的密钥不能被顺手抹掉。"""
+
+        with TestClient(self.app, client=self.loopback) as client:
+            client.put("/api/llm/config", json={"api_key": "sk-1234567890abcd"})
+            client.put(
+                "/api/llm/config",
+                json={"api_key": "", "model": "deepseek-chat"},
+            )
+            body = client.get("/api/llm/config").json()
+        self.assertTrue(body["configured"])
+        self.assertEqual(body["model"], "deepseek-chat")
+
+    def test_clearing_the_key_turns_ai_off(self) -> None:
+        with TestClient(self.app, client=self.loopback) as client:
+            client.put("/api/llm/config", json={"api_key": "sk-1234567890abcd"})
+            cleared = client.put(
+                "/api/llm/config", json={"clear_api_key": True}
+            ).json()
+        self.assertFalse(cleared["configured"])
+        self.assertEqual(cleared["api_key_hint"], "")
+        self.assertEqual(cleared["key_source"], "none")
+
+    def test_key_cannot_be_written_from_another_machine(self) -> None:
+        """把服务暴露到局域网时，外面的人不能往这台机器上写密钥。"""
+
+        with TestClient(self.app, client=("10.0.0.5", 12345)) as client:
+            response = client.put(
+                "/api/llm/config", json={"api_key": "sk-1234567890abcd"}
+            )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(self.config_path.exists())
+
+    def test_connection_test_cannot_be_run_from_another_machine(self) -> None:
+        with TestClient(self.app, client=("10.0.0.5", 12345)) as client:
+            response = client.post(
+                "/api/llm/config/test", json={"api_key": "sk-1234567890abcd"}
+            )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.probes, [])
+
+    def test_connection_test_uses_the_current_form_values(self) -> None:
+        with TestClient(self.app, client=self.loopback) as client:
+            response = client.post(
+                "/api/llm/config/test",
+                json={
+                    "api_key": "sk-1234567890abcd",
+                    "base_url": "https://api.example.com",
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(
+            self.probes, [("sk-1234567890abcd", "https://api.example.com")]
+        )
+
+    def test_connection_test_without_any_key_says_so(self) -> None:
+        with TestClient(self.app, client=self.loopback) as client:
+            response = client.post("/api/llm/config/test", json={})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["ok"])
+        # 没 key 就不该浪费一次网络请求
+        self.assertEqual(self.probes, [])
 
 
 if __name__ == "__main__":

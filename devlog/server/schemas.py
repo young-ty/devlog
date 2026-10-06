@@ -371,6 +371,30 @@ class LLMConfigResponse(BaseModel):
     configured: bool
     model: str
     base_url: str
+    # 只回掩码：页面能看出"配过哪一个 key"，但拿不到明文。
+    api_key_hint: str = ""
+    # env / file / none：key 到底来自环境变量还是本地配置文件。
+    key_source: str = "none"
+    config_path: str = ""
+
+
+class LLMConfigUpdate(BaseModel):
+    """网页端保存大模型设置时的请求体。
+
+    api_key / model / base_url 为 None 或空字符串时表示"这一项不动"，
+    否则用户只改模型名就会顺手把密钥抹掉。API Key 要单独清除时走
+    clear_api_key。
+    """
+
+    api_key: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+    clear_api_key: bool = False
+
+
+class LLMConfigTestResponse(BaseModel):
+    ok: bool
+    message: str
 
 
 class ExportRequest(BaseModel):

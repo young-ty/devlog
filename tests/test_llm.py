@@ -6,15 +6,30 @@
 
 from __future__ import annotations
 
+import json
+import os
 import tempfile
 import unittest
+import urllib.error
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from devlog.core.git_source.models import CommitEvent, NoiseType
 from devlog.core.llm.base import LLMClientBase, LLMError
 from devlog.core.llm.chunking import chunk_texts, summarize_texts_in_chunks
-from devlog.core.llm.deepseek import DEFAULT_MODEL, DeepSeekClient, load_local_config
+from devlog.core.llm.deepseek import (
+    CONFIG_PATH_ENV,
+    DEFAULT_MODEL,
+    DeepSeekClient,
+    default_config_path,
+    llm_settings,
+    load_local_config,
+    mask_api_key,
+    probe_llm_connection,
+    resolve_api_key,
+    save_local_config,
+)
 from devlog.core.llm.themes import (
     AssetSummary,
     ThemeSummary,
@@ -288,6 +303,193 @@ class ConfigTests(unittest.TestCase):
             client = DeepSeekClient(config_path=path)
         self.assertEqual(client.model, "deepseek-coder")
         self.assertEqual(client.base_url, "https://api.example.com")
+
+
+class LocalConfigWriteTests(unittest.TestCase):
+    """配置文件写入：网页上填的密钥要能存、能改、能删。
+
+    全部走临时目录：碰到用户真实的 ~/.devlog/config.toml 就是把测试库
+    和真实密钥搅在一起，属于测试事故。
+    """
+
+    def test_default_config_path_follows_env_override(self) -> None:
+        with patch.dict(os.environ, {CONFIG_PATH_ENV: str(Path("tmp") / "c.toml")}):
+            self.assertEqual(default_config_path(), Path("tmp") / "c.toml")
+
+    def test_default_config_path_falls_back_to_home(self) -> None:
+        with patch.dict(os.environ, {CONFIG_PATH_ENV: ""}):
+            self.assertEqual(
+                default_config_path(),
+                Path.home() / ".devlog" / "config.toml",
+            )
+
+    def test_save_writes_new_file_and_creates_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "nested" / "config.toml"
+            save_local_config({"api_key": "sk-abcdef123456"}, path)
+            self.assertTrue(path.exists())
+            config = load_local_config(path)
+        self.assertEqual(config["api_key"], "sk-abcdef123456")
+
+    def test_save_merges_instead_of_replacing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            save_local_config({"api_key": "sk-abcdef123456"}, path)
+            # 第二次只改模型：密钥必须原样留着，否则用户改个模型就把 key 弄丢了
+            save_local_config({"model": "deepseek-chat"}, path)
+            config = load_local_config(path)
+        self.assertEqual(config["api_key"], "sk-abcdef123456")
+        self.assertEqual(config["model"], "deepseek-chat")
+
+    def test_save_with_none_removes_the_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            save_local_config(
+                {"api_key": "sk-abcdef123456", "model": "deepseek-chat"},
+                path,
+            )
+            save_local_config({"api_key": None}, path)
+            config = load_local_config(path)
+        self.assertNotIn("api_key", config)
+        self.assertEqual(config["model"], "deepseek-chat")
+
+    def test_save_keeps_keys_we_do_not_know_about(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text(
+                'api_key = "sk-old"\ncustom_flag = "keep-me"\n',
+                encoding="utf-8",
+            )
+            save_local_config({"model": "deepseek-chat"}, path)
+            config = load_local_config(path)
+        self.assertEqual(config["custom_flag"], "keep-me")
+        self.assertEqual(config["api_key"], "sk-old")
+
+    def test_save_keeps_odd_values_on_one_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            save_local_config(
+                {"api_key": 'sk-weird"\nvalue', "model": "deepseek-chat"},
+                path,
+            )
+            text = path.read_text(encoding="utf-8")
+            config = load_local_config(path)
+        # 文件结构应该是"注释 + api_key + model"三行：值里的换行必须
+        # 压平，多一行就多一条假配置
+        lines = text.strip().splitlines()
+        self.assertEqual(len(lines), 3)
+        self.assertTrue(lines[0].startswith("#"))
+        self.assertTrue(config["api_key"].startswith("sk-weird"))
+        self.assertEqual(config["model"], "deepseek-chat")
+
+
+class ApiKeyMaskTests(unittest.TestCase):
+    def test_masks_the_middle_of_a_key(self) -> None:
+        self.assertEqual(mask_api_key("sk-1234567890abcd"), "sk-1****abcd")
+
+    def test_short_values_are_fully_hidden(self) -> None:
+        self.assertEqual(mask_api_key("sk-1"), "****")
+        self.assertEqual(mask_api_key("   "), "****")
+
+    def test_surrounding_whitespace_is_ignored(self) -> None:
+        self.assertEqual(mask_api_key("  sk-1234567890abcd  "), "sk-1****abcd")
+
+
+class ResolveApiKeyTests(unittest.TestCase):
+    def test_environment_wins_over_the_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            save_local_config({"api_key": "sk-from-file"}, path)
+            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-from-env"}):
+                self.assertEqual(resolve_api_key(path), "sk-from-env")
+            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}):
+                self.assertEqual(resolve_api_key(path), "sk-from-file")
+
+    def test_missing_everywhere_gives_empty_string(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}):
+                self.assertEqual(resolve_api_key(path), "")
+
+    def test_llm_settings_reports_hint_and_source_without_the_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            save_local_config(
+                {"api_key": "sk-1234567890abcd", "model": "deepseek-chat"},
+                path,
+            )
+            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}):
+                settings = llm_settings(path)
+        self.assertEqual(settings["configured"], "true")
+        self.assertEqual(settings["key_source"], "file")
+        self.assertEqual(settings["api_key_hint"], "sk-1****abcd")
+        self.assertEqual(settings["model"], "deepseek-chat")
+        self.assertNotIn("sk-1234567890abcd", json.dumps(settings))
+
+    def test_llm_settings_says_none_when_nothing_is_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}):
+                settings = llm_settings(path)
+        self.assertEqual(settings["configured"], "false")
+        self.assertEqual(settings["key_source"], "none")
+        self.assertEqual(settings["api_key_hint"], "")
+        self.assertEqual(settings["model"], DEFAULT_MODEL)
+
+
+class _FakeResponse:
+    """够用的假响应：probe 只用到上下文管理器和 read()。"""
+
+    def __init__(self, body: str) -> None:
+        self._body = body
+
+    def read(self) -> bytes:
+        return self._body.encode("utf-8")
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+
+class ProbeConnectionTests(unittest.TestCase):
+    """探活要区分"通"、"key 不对"和"压根连不上"。"""
+
+    URLOPEN = "devlog.core.llm.deepseek.urllib.request.urlopen"
+
+    def test_reports_success_and_how_many_models_came_back(self) -> None:
+        body = json.dumps(
+            {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]}
+        )
+        with patch(self.URLOPEN, return_value=_FakeResponse(body)):
+            ok, message = probe_llm_connection("sk-test", "https://api.deepseek.com")
+        self.assertTrue(ok)
+        self.assertIn("2", message)
+
+    def test_strips_the_trailing_slash_before_building_the_url(self) -> None:
+        with patch(
+            self.URLOPEN,
+            return_value=_FakeResponse('{"data": []}'),
+        ) as opened:
+            probe_llm_connection("sk-test", "https://api.example.com/")
+        request = opened.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.example.com/models")
+
+    def test_rejects_an_invalid_key(self) -> None:
+        error = urllib.error.HTTPError(
+            "https://api.deepseek.com/models", 401, "Unauthorized", {}, None
+        )
+        with patch(self.URLOPEN, side_effect=error):
+            ok, message = probe_llm_connection("sk-bad", "https://api.deepseek.com")
+        self.assertFalse(ok)
+        self.assertIn("401", message)
+
+    def test_reports_a_network_failure(self) -> None:
+        with patch(self.URLOPEN, side_effect=urllib.error.URLError("boom")):
+            ok, message = probe_llm_connection("sk-test", "https://api.deepseek.com")
+        self.assertFalse(ok)
+        self.assertIn("连不上", message)
 
 
 class TranslationTests(unittest.TestCase):

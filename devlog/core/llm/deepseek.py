@@ -11,7 +11,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from devlog.core.llm.base import LLMClientBase, LLMError
 
@@ -22,13 +22,32 @@ DEFAULT_TIMEOUT_SECONDS = 60
 NETWORK_RETRY_ATTEMPTS = 3
 
 
+# 配置文件里我们认识、并且允许网页端写入的字段。
+CONFIG_KEYS = ("api_key", "model", "base_url")
+# 指向自定义配置文件的环境变量：测试和高级用户用它避开 ~/.devlog。
+CONFIG_PATH_ENV = "DEVLOG_CONFIG_PATH"
+
+
+def default_config_path() -> Path:
+    """本地配置文件位置；默认 ~/.devlog/config.toml。
+
+    密钥只落在用户主目录下，永远不进任何 Git 仓库。测试用
+    DEVLOG_CONFIG_PATH 指到临时文件，避免碰到用户真实的配置。
+    """
+
+    override = os.environ.get(CONFIG_PATH_ENV)
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".devlog" / "config.toml"
+
+
 def load_local_config(config_path: str | Path | None = None) -> dict[str, str]:
     """读取简单的 key = value 配置文件（TOML 子集）。
 
     默认位置是 ~/.devlog/config.toml。密钥按设计保存在所有 Git 仓库之外。
     """
 
-    path = Path(config_path) if config_path is not None else Path.home() / ".devlog" / "config.toml"
+    path = Path(config_path) if config_path is not None else default_config_path()
     config: dict[str, str] = {}
     if not path.exists():
         return config
@@ -43,15 +62,135 @@ def load_local_config(config_path: str | Path | None = None) -> dict[str, str]:
 
 
 def llm_settings(config_path: str | Path | None = None) -> dict[str, str]:
-    """返回供 Web 界面使用的安全（不含密钥）LLM 配置。"""
+    """返回供 Web 界面使用的 LLM 配置。
 
-    config = load_local_config(config_path)
-    api_key = os.environ.get("DEEPSEEK_API_KEY") or config.get("api_key")
+    刻意不含明文密钥：只给掩码和"密钥来自哪里"。界面因此能显示状态，
+    但就算页面被人看到也偷不走 key。
+    """
+
+    path = Path(config_path) if config_path is not None else default_config_path()
+    config = load_local_config(path)
+    env_key = os.environ.get("DEEPSEEK_API_KEY")
+    file_key = config.get("api_key")
+    api_key = env_key or file_key
+    if env_key:
+        key_source = "env"
+    elif file_key:
+        key_source = "file"
+    else:
+        key_source = "none"
     return {
         "configured": "true" if api_key else "false",
         "model": config.get("model") or DEFAULT_MODEL,
         "base_url": config.get("base_url") or DEFAULT_BASE_URL,
+        "api_key_hint": mask_api_key(api_key) if api_key else "",
+        "key_source": key_source,
+        "config_path": str(path),
     }
+
+
+def mask_api_key(api_key: str) -> str:
+    """把密钥打成 ``sk-1****abcd`` 这种掩码：够辨认，不够盗用。"""
+
+    key = api_key.strip()
+    if len(key) <= 8:
+        return "****"
+    return f"{key[:4]}****{key[-4:]}"
+
+
+def resolve_api_key(config_path: str | Path | None = None) -> str:
+    """按 环境变量 > 配置文件 的顺序取出生效的密钥；都没有则返回空串。"""
+
+    config = load_local_config(
+        config_path if config_path is not None else default_config_path()
+    )
+    return os.environ.get("DEEPSEEK_API_KEY") or config.get("api_key") or ""
+
+
+def _escape_config_value(value: str) -> str:
+    """转义写进双引号的值，避免换行或引号把配置文件写坏。"""
+
+    return (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", " ")
+        .replace("\r", " ")
+    )
+
+
+def save_local_config(
+    updates: Mapping[str, str | None],
+    config_path: str | Path | None = None,
+) -> Path:
+    """把改动合并写回 config.toml；值为 None 表示删掉这个键。
+
+    只覆盖我们认识的字段，用户手写的其它配置原样保留，避免被网页
+    上的一次保存顺手抹掉。
+    """
+
+    path = Path(config_path) if config_path is not None else default_config_path()
+    config = load_local_config(path)
+    for key, value in updates.items():
+        if value is None:
+            config.pop(key, None)
+        else:
+            config[key] = value
+
+    lines = ["# DevLog 本地配置（自动生成，可手改；请勿提交到任何 Git 仓库）"]
+    for key in CONFIG_KEYS:
+        if key in config:
+            lines.append(f'{key} = "{_escape_config_value(config.pop(key))}"')
+    for key in sorted(config):
+        lines.append(f'{key} = "{_escape_config_value(config[key])}"')
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # 类 Unix 系统上收紧权限：密钥文件不该让同机器其他用户读到。
+    if os.name != "nt":
+        path.chmod(0o600)
+    return path
+
+
+def probe_llm_connection(
+    api_key: str,
+    base_url: str,
+    timeout: int = 10,
+) -> tuple[bool, str]:
+    """拉一次 ``/models`` 验证 key 和地址；这一步不产生生成费用。
+
+    返回 (是否连通, 给用户看的中文说明)。这里刻意不做重试：用户要的是
+    "现在到底通不通"，网络抖动让他再点一次即可。
+    """
+
+    url = base_url.rstrip("/") + "/models"
+    request = urllib.request.Request(
+        url,
+        headers={"Authorization": "Bearer " + api_key},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+        payload = json.loads(raw)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            return False, f"API Key 无效或没有权限（HTTP {exc.code}）"
+        return False, f"接口返回 HTTP {exc.code}，请检查接口地址"
+    except (urllib.error.URLError, OSError) as exc:
+        return False, f"连不上接口：{exc}"
+    except (json.JSONDecodeError, ValueError) as exc:
+        return False, f"接口返回的不是 JSON：{exc}"
+
+    models: list[str] = []
+    if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+        models = [
+            item.get("id")
+            for item in payload["data"]
+            if isinstance(item, dict) and item.get("id")
+        ]
+    if models:
+        return True, f"连接正常，接口返回 {len(models)} 个可用模型"
+    return True, "连接正常"
 
 
 class DeepSeekClient(LLMClientBase):
@@ -65,7 +204,9 @@ class DeepSeekClient(LLMClientBase):
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
         config_path: str | Path | None = None,
     ) -> None:
-        config = load_local_config(config_path)
+        config = load_local_config(
+            config_path if config_path is not None else default_config_path()
+        )
         resolved_key = (
             api_key
             or os.environ.get("DEEPSEEK_API_KEY")

@@ -19,7 +19,12 @@ from fastapi.staticfiles import StaticFiles
 from devlog.cli import runner
 from devlog.core.capture.models import AnnotationKind, BugStatus, DailyNote
 from devlog.core.git_source.scanner import GitSourceError
-from devlog.core.llm.deepseek import llm_settings
+from devlog.core.llm.deepseek import (
+    llm_settings,
+    probe_llm_connection,
+    resolve_api_key,
+    save_local_config,
+)
 from devlog.core.llm.base import LLMError
 from devlog.core.review.markdown import ReviewExportError
 from devlog.core.storage.database import DevLogDB, DatabaseError, default_db_path
@@ -92,10 +97,31 @@ def is_loopback_request(request: Request) -> bool:
         return False
 
 
+def _llm_config_response() -> schemas.LLMConfigResponse:
+    """把 llm_settings 的原始字符串翻译成给界面的类型化响应。"""
+
+    settings = llm_settings()
+    return schemas.LLMConfigResponse(
+        configured=settings["configured"] == "true",
+        model=settings["model"],
+        base_url=settings["base_url"],
+        api_key_hint=settings.get("api_key_hint", ""),
+        key_source=settings.get("key_source", "none"),
+        config_path=settings.get("config_path", ""),
+    )
+
+
+LLM_KEY_REQUIRES_LOCAL = {
+    "detail": "大模型密钥只允许在本机浏览器里配置。"
+    "请在本机打开 DevLog 后再填写。"
+}
+
+
 def create_app(
     db_path: str | Path | None = None,
     web_dir: str | Path | None = None,
     directory_picker: Callable[[], str | None] | None = None,
+    llm_probe: Callable[[str, str], tuple[bool, str]] | None = None,
 ) -> FastAPI:
     """构建配置好的 DevLog API 应用（供 uvicorn 与测试使用）。
 
@@ -105,6 +131,9 @@ def create_app(
 
     `directory_picker` 默认调用本机系统对话框；测试时注入假实现，
     这样跑测试不会真的弹出窗口。
+
+    `llm_probe` 默认真的去请求供应商的 /models；测试注入假实现，
+    这样跑测试不会真的花钱或依赖外网。
     """
 
     resolved_db = (
@@ -114,6 +143,9 @@ def create_app(
     )
     web_dist = resolve_web_dist(web_dir)
     picker = directory_picker or desktop.pick_directory
+    probe = llm_probe or (
+        lambda key, url: probe_llm_connection(key, url)
+    )
     app = FastAPI(
         title="DevLog API",
         description="本地开发复盘工具的 HTTP 接口",
@@ -237,12 +269,79 @@ def create_app(
         response_model=schemas.LLMConfigResponse,
     )
     def llm_config():
-        settings = llm_settings()
-        return schemas.LLMConfigResponse(
-            configured=settings["configured"] == "true",
-            model=settings["model"],
-            base_url=settings["base_url"],
-        )
+        return _llm_config_response()
+
+    @app.put(
+        "/api/llm/config",
+        response_model=schemas.LLMConfigResponse,
+    )
+    def update_llm_config(
+        payload: schemas.LLMConfigUpdate,
+        request: Request,
+    ):
+        """把网页上填的 API Key / 模型 / 接口地址写进本机配置文件。
+
+        写接口比读接口危险得多：它能把用户的密钥落到磁盘上，所以在
+        这里再挡一次"只有本机能改"。
+        """
+
+        if not is_loopback_request(request):
+            return JSONResponse(
+                status_code=403,
+                content=LLM_KEY_REQUIRES_LOCAL,
+            )
+
+        updates: dict[str, str | None] = {}
+        api_key = (payload.api_key or "").strip()
+        if payload.clear_api_key:
+            updates["api_key"] = None
+        elif api_key:
+            updates["api_key"] = api_key
+        # 空字段一律当成"这次不改这一项"，否则用户只改模型名就会
+        # 顺手把已经存好的密钥抹掉。
+        model = (payload.model or "").strip()
+        if model:
+            updates["model"] = model
+        base_url = (payload.base_url or "").strip()
+        if base_url:
+            updates["base_url"] = base_url
+
+        if updates:
+            save_local_config(updates)
+        return _llm_config_response()
+
+    @app.post(
+        "/api/llm/config/test",
+        response_model=schemas.LLMConfigTestResponse,
+    )
+    def test_llm_config(
+        payload: schemas.LLMConfigUpdate,
+        request: Request,
+    ):
+        """用一次 /models 请求验证 key 和地址，不产生生成费用。"""
+
+        if not is_loopback_request(request):
+            return JSONResponse(
+                status_code=403,
+                content=LLM_KEY_REQUIRES_LOCAL,
+            )
+
+        api_key = (payload.api_key or "").strip() or resolve_api_key()
+        if not api_key:
+            return schemas.LLMConfigTestResponse(
+                ok=False,
+                message="还没有填写 API Key。",
+            )
+
+        base_url = (payload.base_url or "").strip() or llm_settings()["base_url"]
+        try:
+            ok, message = probe(api_key, base_url)
+        except Exception as exc:  # noqa: BLE001 - 网络层什么都可能抛
+            return schemas.LLMConfigTestResponse(
+                ok=False,
+                message=f"测试连接失败：{exc}",
+            )
+        return schemas.LLMConfigTestResponse(ok=ok, message=message)
 
     @app.get(
         "/api/projects/{project_id}/reviews",
