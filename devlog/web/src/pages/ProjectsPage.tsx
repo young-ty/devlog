@@ -140,11 +140,11 @@ export function ProjectsPage({ onOpenProject }: ProjectsPageProps) {
               {picking ? "选择中…" : "浏览…"}
             </button>
           </div>
-          <p className="form-hint">
-            {picking
-              ? "已打开系统文件夹选择框，请到弹出的窗口里选一个仓库目录。"
-              : "点「浏览…」会在本机弹出一个文件夹选择框，不用再去复制路径。"}
-          </p>
+          {picking && (
+            <p className="form-hint">
+              已打开系统文件夹选择框，请到弹出的窗口里选一个仓库目录。
+            </p>
+          )}
           <input
             placeholder="项目名（可选，默认用文件夹名）"
             value={name}

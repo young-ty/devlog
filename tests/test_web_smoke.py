@@ -164,6 +164,10 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("pickDirectory", page_text)
         self.assertIn("浏览", page_text)
         self.assertIn("is_git_repo", page_text)
+        # 选择框弹出在系统桌面上，页面上得留一句"去哪里找这个窗口"；
+        # 但常态下不再解释"浏览是干什么的"，那是多余的一行字。
+        self.assertIn("picking &&", page_text)
+        self.assertIn("请到弹出的窗口里选", page_text)
 
     def test_guidance_answer_bindings_exist(self) -> None:
         api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
