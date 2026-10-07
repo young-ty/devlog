@@ -243,7 +243,7 @@ export function TimelineRail({
         </div>
         <span className="tl-drag-hint">
           <Icon name="drag" className="tl-drag-icon" />
-          按住左键拖动 · 点卡片展开
+          按住左键拖动 · 点卡片底部的「展开」
         </span>
       </div>
 

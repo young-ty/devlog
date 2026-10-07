@@ -599,6 +599,14 @@ class TimelineOpenCardTests(unittest.TestCase):
         self.assertIn('type="button"', self.card)
         self.assertIn("button.tl-more:focus-visible", self.styles)
 
+    def test_drag_hint_points_at_the_button(self) -> None:
+        # 提示语得和真实交互一致：整卡能点的时候写"点卡片展开"没问题，
+        # 现在只有按钮能点，文案不改用户会去点正文，然后以为界面坏了。
+        rail = (
+            WEB_DIR / "src" / "components" / "TimelineRail.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("点卡片底部的「展开」", rail)
+
 
 if __name__ == "__main__":
     unittest.main()
