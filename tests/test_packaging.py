@@ -218,6 +218,31 @@ class ReadmeScreenshotTests(unittest.TestCase):
                 self.assertRegex(text, rf'<img\s+src="{re.escape(source)}"\s+alt="[^"]+"')
 
 
+class ContinuousIntegrationTests(unittest.TestCase):
+    """CI 存在的意义：别人的机器（和 GitHub 的机器）能自己跑通全量测试。"""
+
+    def setUp(self) -> None:
+        self.workflow = ROOT / ".github" / "workflows" / "tests.yml"
+
+    def test_workflow_file_exists(self) -> None:
+        self.assertTrue(self.workflow.is_file(), "缺少 .github/workflows/tests.yml")
+
+    def test_workflow_runs_the_full_suite_on_python_312(self) -> None:
+        text = self.workflow.read_text(encoding="utf-8")
+        self.assertIn("actions/checkout", text)
+        self.assertIn('python-version: "3.12"', text)
+        self.assertIn("python -m unittest discover -s tests -t tests", text)
+
+    def test_workflow_also_builds_the_frontend(self) -> None:
+        text = self.workflow.read_text(encoding="utf-8")
+        self.assertIn("pnpm install --frozen-lockfile", text)
+        self.assertIn("pnpm run build", text)
+
+    def test_readme_badge_points_at_this_workflow(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("actions/workflows/tests.yml/badge.svg", text)
+
+
 class LauncherScriptTests(unittest.TestCase):
     """一键启动脚本必须存在、可被双击，并复用统一的 serve 入口。"""
 
