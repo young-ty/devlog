@@ -14,6 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "devlog" / "web"
 
 
+def css_rule(styles: str, selector: str) -> str:
+    """取出一个选择器的声明块。
+
+    "文件里有这个选择器"太弱了：批注面板被挤扁时，选择器一直都在，是里面
+    的 flex 声明在坏事。断言得落到声明块上。
+    """
+
+    marker = f"{selector} {{"
+    start = styles.index(marker)
+    return styles[start : styles.index("}", start)]
+
+
 class WebSmokeTests(unittest.TestCase):
     def test_frontend_sources_exist(self) -> None:
         for relative in (
@@ -511,6 +523,69 @@ class DayDigestBindingTests(unittest.TestCase):
 
         styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
         self.assertIn(".bug-card-focus", styles)
+
+
+class TimelineOpenCardTests(unittest.TestCase):
+    """展开的时间线卡片：批注输入框不许被挤成一条缝。
+
+    卡片高度由时间线几何算出来写死在 maxHeight 上（约 214~334px），而展开
+    后是正文 + 原文 + 批注表单，必然放不下。这个前提下只有两种写法：让整张
+    卡片滚动，或者挑一个子元素压缩它。后者会把批注输入框压成一个十几像素的
+    条，用户根本点不进去。
+    """
+
+    def setUp(self) -> None:
+        self.styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        self.card = (
+            WEB_DIR / "src" / "components" / "TimelineEventCard.tsx"
+        ).read_text(encoding="utf-8")
+
+    def test_expanded_card_scrolls_as_a_whole(self) -> None:
+        self.assertIn("overflow-y: auto", css_rule(self.styles, ".tl-open"))
+
+    def test_no_child_of_the_card_may_shrink(self) -> None:
+        # 谁都不许被压缩，空间不够就整体滚动。
+        for selector in (
+            ".tl-card-head",
+            ".tl-title",
+            ".tl-body",
+            ".tl-extra",
+            ".tl-more",
+            ".tl-slot",
+            ".tl-card .annotation-panel",
+        ):
+            with self.subTest(selector=selector):
+                self.assertIn("flex: none", css_rule(self.styles, selector))
+
+    def test_annotation_panel_stops_being_the_shock_absorber(self) -> None:
+        panel = css_rule(self.styles, ".tl-card .annotation-panel")
+        self.assertNotIn("overflow-y: auto", panel)
+        self.assertNotIn("min-height: 0", panel)
+
+    def test_collapse_entry_stays_visible_while_the_card_scrolls(self) -> None:
+        # 卡片内部滚动后，"收起"会被滚到看不见的地方，得钉在底部。
+        more = css_rule(self.styles, ".tl-more")
+        self.assertIn("position: sticky", more)
+        self.assertIn("bottom: 0", more)
+
+    def test_connector_line_hangs_on_the_node_not_on_the_card(self) -> None:
+        # 卡片一旦滚动就会裁剪溢出内容，挂在卡片上的伪元素会被一起裁掉，
+        # 圆点和曲线之间那根短线就断了。
+        self.assertNotIn(".tl-card::after", self.styles)
+        for selector in (
+            ".tl-node::before",
+            ".tl-above .tl-node::before",
+            ".tl-below .tl-node::before",
+        ):
+            with self.subTest(selector=selector):
+                self.assertIn(selector, self.styles)
+
+    def test_annotation_area_does_not_collapse_the_card(self) -> None:
+        # 整张卡片是"点开 / 收起"的按钮，点批注输入框不该把卡片收起来，
+        # 在输入框里敲空格也不该被卡片的键盘处理吞掉。
+        self.assertIn('className="tl-slot"', self.card)
+        self.assertIn("stopPropagation", self.card)
+        self.assertIn("{children}", self.card)
 
 
 if __name__ == "__main__":

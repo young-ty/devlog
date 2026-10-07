@@ -206,7 +206,17 @@ export function TimelineEventCard({
       {open && content.detail && (
         <div className="tl-extra">{content.detail}</div>
       )}
-      {open && children}
+      {/* 卡片整体是个"点开 / 收起"的按钮，但批注区里要选类型、要打字。
+          不拦住事件的话，点一下输入框就把整张卡片收起来了。 */}
+      {open && children && (
+        <div
+          className="tl-slot"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {children}
+        </div>
+      )}
       {expandable && (
         <div className="tl-more">
           <span>{open ? "收起" : "展开"}</span>

@@ -2055,22 +2055,23 @@ button.tiny {
   top: 18px;
 }
 
-/* 连到圆点上的那根短线。卡片本身 overflow 可见，短线才不会被裁掉。 */
-.tl-card::after {
+/* 连到圆点上的那根短线挂在小节点上，而不是卡片上：
+   展开的卡片需要纵向滚动，overflow 会把卡片自己的伪元素一起裁掉。 */
+.tl-node::before {
   content: "";
   position: absolute;
-  left: 50%;
+  left: 0;
   width: 1px;
   height: 18px;
   background: var(--tl-track);
 }
 
-.tl-above .tl-card::after {
-  bottom: -19px;
+.tl-above .tl-node::before {
+  bottom: 0;
 }
 
-.tl-below .tl-card::after {
-  top: -19px;
+.tl-below .tl-node::before {
+  top: 0;
 }
 
 .tl-clampable {
@@ -2084,6 +2085,10 @@ button.tiny {
 .tl-open {
   border-color: var(--accent-border-strong);
   box-shadow: 0 10px 30px var(--shadow-strong);
+  /* 展开后正文 + 原文 + 批注表单很容易超过几何上限（约 214~334px）。
+     这里让卡片整体滚动：只压缩某一个子元素，会把它挤成一条缝。 */
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .tl-clampable:focus-visible {
@@ -2173,6 +2178,11 @@ button.tiny {
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
+  /* 卡片内部会滚动，收起入口得一直钉在看得见的地方。 */
+  position: sticky;
+  bottom: 0;
+  padding-bottom: 2px;
+  background: var(--panel-hover);
 }
 
 .tl-chevron {
@@ -2185,13 +2195,18 @@ button.tiny {
   transform: rotate(180deg);
 }
 
-/* 卡片窄，展开后的批注区改成竖排，超出部分在卡片内部滚动。 */
+/* 卡片窄，展开后的批注区改成竖排。整张卡片已经会滚动（见 .tl-open），
+   这里就绝不能再参与压缩：一压缩，输入框就被挤没了。 */
 .tl-card .annotation-panel {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow-y: auto;
+  flex: none;
+  overflow: visible;
   margin-top: 8px;
   padding: 8px;
+}
+
+/* 展开后追加内容的插槽。也是卡片的子项，同样不许被压缩。 */
+.tl-slot {
+  flex: none;
 }
 
 .tl-card .annotation-list {
