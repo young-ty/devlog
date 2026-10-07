@@ -177,7 +177,7 @@ python -m devlog.eval
 ```
 
 完整测试套件覆盖 Git 扫描、SQLite 存储、主题聚类、LLM、复盘生成/导出、
-每日小结、CLI、FastAPI、React 构建以及离线评测，共 347 个用例，全量跑完约 40 秒。
+每日小结、CLI、FastAPI、React 构建以及离线评测，共 350 个用例，全量跑完约 40 秒。
 每次 push 和 PR 都会在 GitHub Actions 上重跑一遍全量测试，并单独做一次前端类型
 检查与构建，配置见 [.github/workflows/tests.yml](.github/workflows/tests.yml)。
 

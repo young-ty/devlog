@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Icon, isIconName } from "./Icons";
+import { SourceList } from "./SourceList";
 import type { ClaimStatus, FinalDocument, FinalSection } from "../types";
 
 /** 成稿阅读视图。
@@ -86,9 +87,7 @@ export function ReviewReadingView({
                 <div className="rv-meta">
                   <span className="rv-chip rv-chip-ai">AI 推断</span>
                   {claim.sources.length > 0 && (
-                    <span className="rv-src">
-                      来源：{claim.sources.join("、")}
-                    </span>
+                    <SourceList sources={claim.sources} />
                   )}
                   <button
                     type="button"
@@ -128,9 +127,7 @@ export function ReviewReadingView({
                     {STATUS_LABELS[claim.status] ?? claim.status}
                   </span>
                   {claim.sources.length > 0 && (
-                    <span className="rv-src">
-                      来源：{claim.sources.join("、")}
-                    </span>
+                    <SourceList sources={claim.sources} />
                   )}
                   {claim.user_note && (
                     <span className="rv-note">备注：{claim.user_note}</span>

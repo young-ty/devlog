@@ -241,6 +241,42 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("built in", output)
 
 
+class SourceListTests(unittest.TestCase):
+    """来源展示：几十条 hash 不许铺在正文里，但可追溯性不能丢。"""
+
+    def setUp(self) -> None:
+        self.component = WEB_DIR / "src" / "components" / "SourceList.tsx"
+
+    def test_shared_component_collapses_long_lists(self) -> None:
+        self.assertTrue(self.component.exists(), "缺少共用的来源列表组件")
+        text = self.component.read_text(encoding="utf-8")
+        # 收起时只给短 hash，其余的折成一个可点的入口。
+        self.assertIn("SHORT_LENGTH = 7", text)
+        self.assertIn("VISIBLE_WHEN_COLLAPSED = 3", text)
+        self.assertIn("等 {sources.length} 个提交", text)
+        # 悬停要能看到完整 hash，否则折叠等于把来源弄丢了。
+        self.assertIn("title={source}", text)
+
+    def test_both_views_share_one_implementation(self) -> None:
+        for relative in (
+            "components/ClaimCard.tsx",
+            "components/ReviewReadingView.tsx",
+        ):
+            with self.subTest(component=relative):
+                text = (WEB_DIR / "src" / relative).read_text(encoding="utf-8")
+                self.assertIn('from "./SourceList"', text)
+                self.assertIn("<SourceList sources=", text)
+                # 谁都不许再自己拼一份来源串出来。
+                self.assertNotIn('join("、")', text)
+                self.assertNotIn("slice(0, 7)", text)
+
+    def test_source_toggle_has_its_own_style(self) -> None:
+        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
+        for selector in (".source-list", ".source-list code", ".source-toggle"):
+            with self.subTest(selector=selector):
+                self.assertIn(selector, styles)
+
+
 class ReviewReadingViewBindingsTests(unittest.TestCase):
     """复盘页要有「成稿阅读」视图，并且收录规则不许在前端再写一份。"""
 

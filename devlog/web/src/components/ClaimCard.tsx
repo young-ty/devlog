@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { ReviewClaim } from "../types";
+import { SourceList } from "./SourceList";
 import { StatusBadge } from "./StatusBadge";
 
 interface ClaimCardProps {
@@ -21,8 +22,6 @@ export function ClaimCard({ claim, onConfirm }: ClaimCardProps) {
     }
   }
 
-  const shownSources = claim.sources.slice(0, 3);
-  const extraSources = claim.sources.length - shownSources.length;
   const isPending = claim.status === "ai_pending";
 
   return (
@@ -35,11 +34,7 @@ export function ClaimCard({ claim, onConfirm }: ClaimCardProps) {
 
       {claim.sources.length > 0 && (
         <p className="claim-sources">
-          来源提交：
-          {shownSources.map((source) => (
-            <code key={source}>{source.slice(0, 7)}</code>
-          ))}
-          {extraSources > 0 && <span>等 {claim.sources.length} 个提交</span>}
+          <SourceList sources={claim.sources} />
         </p>
       )}
 

@@ -719,19 +719,43 @@ button.secondary:hover:not(:disabled) {
 }
 
 .claim-sources {
-  color: var(--muted);
-  font-size: 12.5px;
   margin: 0;
 }
 
-.claim-sources code {
+.source-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  /* 展开后可能有几十个芯片，必须允许它被压缩并换行，否则会顶破版面。 */
+  min-width: 0;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.source-list code {
   background: var(--neutral-soft);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 6px;
-  margin-right: 5px;
   font-family: Consolas, "Cascadia Mono", monospace;
   color: var(--text-secondary);
+}
+
+/* 「等 N 个提交」是个开关，不能长得像正文，否则没人知道能点。 */
+.source-toggle {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent-border-strong);
+}
+
+.source-toggle:hover {
+  color: var(--accent-bright);
 }
 
 .claim-note {
