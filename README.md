@@ -4,6 +4,17 @@ DevLog 是面向个人开发者的**本地开发复盘工具**：扫描 Git 仓�
 按开发主题聚类，再生成一份“有据可查、人机共创”的结构化复盘草稿。
 事实论断带 commit 来源，AI 推断先标记为“待确认”，你确认并补充后导出 Markdown。
 
+## 快速体验（不装任何环境）
+
+到 [Releases](https://github.com/young-ty/devlog/releases/latest) 下载 `DevLog.exe`，双击运行，
+浏览器会自动打开 <http://127.0.0.1:8000>。目标机器不需要装 Python，也不需要装 Node。
+
+> 发布包没有做代码签名，Windows 首次运行会弹 SmartScreen 提示，点「更多信息 → 仍要运行」即可；
+> Release 页里附了 SHA256 校验值。关掉那个黑色控制台窗口就等于退出 DevLog。
+> 所有状态都只留在本机 `%USERPROFILE%\.devlog\`，不会上传到任何地方。
+
+想从源码运行或参与开发，看下面的[快速开始](#快速开始)。
+
 ## 核心能力
 
 - 只读 Git 历史，零侵入：不需要在开发过程中额外记录任何东西；
@@ -144,7 +155,7 @@ python -m devlog.eval
 ```
 
 完整测试套件覆盖 Git 扫描、SQLite 存储、主题聚类、LLM、复盘生成/导出、
-每日小结、CLI、FastAPI、React 构建以及离线评测，共 306 个用例。
+每日小结、CLI、FastAPI、React 构建以及离线评测，共 340 个用例，全量跑完约 30 秒。
 
 ## 项目结构
 
@@ -197,3 +208,8 @@ devlog/
 - rebase / force push 之后历史变化：执行 `devlog scan . --reset` 重建缓存。
 - 界面打不开 / 双击没反应：先跑 `devlog doctor`（打包版是 `dist\DevLog.exe doctor`），
   它会逐条告诉你前端产物、Git、数据库、大模型配置哪一项没就绪。
+- 下载的 exe 被 Windows 拦下来：那是未签名程序的 SmartScreen 提示，点「更多信息 → 仍要运行」
+  即可；想确认文件没被改过，把它的 SHA256 和 Release 页里公布的对比一下。
+- 数据存在哪、怎么彻底清理：状态库和密钥都在 `%USERPROFILE%\.devlog\`
+  （`devlog.db` 与 `config.toml`），删掉这个目录就等于回到全新状态。
+  唯一会写进你自己仓库的，是你主动导出的复盘 Markdown（默认落在 `<仓库>/docs/retrospectives/`）。

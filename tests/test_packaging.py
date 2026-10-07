@@ -164,6 +164,25 @@ class ReadmeTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, text)
 
+    def test_readme_documents_distribution_and_data_location(self) -> None:
+        """README 必须说清两件对外的事：怎么拿到 exe、数据存在哪。
+
+        前者决定别人能不能零环境体验，后者是"本地工具"这个卖点的证据；
+        顺手把未签名程序的 SmartScreen 提示写清楚，免得下载后被吓退。
+        """
+
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        fragments = [
+            "releases/latest",
+            "SmartScreen",
+            "SHA256",
+            "%USERPROFILE%\\.devlog",
+            "docs/retrospectives",
+        ]
+        for fragment in fragments:
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, text)
+
 
 class LauncherScriptTests(unittest.TestCase):
     """一键启动脚本必须存在、可被双击，并复用统一的 serve 入口。"""
