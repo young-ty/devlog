@@ -309,16 +309,31 @@ class FrozenEntryTests(unittest.TestCase):
 
 
 class DoctorCommandTests(unittest.TestCase):
+    """doctor 的健康结论只能取决于机器上真实具备的前提。
+
+    干净检出（CI、别人刚 clone）里没有 devlog/web/dist，如果直接断言
+    "整体健康"，就等于要求每个跑测试的人都先构建一次前端。所以默认
+    场景用临时目录假装产物已就绪，把"前端在不在"单独交给专门那条用例。
+    """
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmp.name) / "doctor.db"
+        self.web_dist = Path(self.tmp.name) / "dist"
+        self.web_dist.mkdir()
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def _with_built_frontend(self):
+        return mock.patch(
+            "devlog.cli.doctor.resolve_web_dist", return_value=self.web_dist
+        )
+
     def test_report_covers_every_prerequisite(self) -> None:
         buffer = io.StringIO()
-        code = doctor.run_doctor(self.db_path, stream=buffer)
+        with self._with_built_frontend():
+            code = doctor.run_doctor(self.db_path, stream=buffer)
         text = buffer.getvalue()
 
         for fragment in (
@@ -330,7 +345,6 @@ class DoctorCommandTests(unittest.TestCase):
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, text)
-        # 仓库里前端产物是构建好的，所以这里应当是"健康"的
         self.assertEqual(code, 0)
         self.assertIn(f"schema v", text)
 
@@ -349,7 +363,7 @@ class DoctorCommandTests(unittest.TestCase):
         self.assertTrue(any("Git" in line for line in lines))
 
     def test_unconfigured_llm_is_only_a_warning(self) -> None:
-        with mock.patch(
+        with self._with_built_frontend(), mock.patch(
             "devlog.cli.doctor.llm_settings",
             return_value={"configured": "false", "model": "x", "base_url": "y"},
         ):
@@ -362,7 +376,7 @@ class DoctorCommandTests(unittest.TestCase):
         self.assertEqual(args.command, "doctor")
 
         buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer):
+        with self._with_built_frontend(), contextlib.redirect_stdout(buffer):
             code = main(["--db", str(self.db_path), "doctor"])
         self.assertEqual(code, 0)
         self.assertIn("DevLog 自检", buffer.getvalue())
