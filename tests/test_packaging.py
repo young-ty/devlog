@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import subprocess
 import sys
 import tempfile
@@ -182,6 +183,39 @@ class ReadmeTests(unittest.TestCase):
         for fragment in fragments:
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, text)
+
+
+class ReadmeScreenshotTests(unittest.TestCase):
+    """README 里的界面预览必须真的指向仓库内的图片，否则 GitHub 上是裂图。
+
+    这是给"刚拿到仓库的陌生人"看的门面：截图挂在 README 里，就不能靠
+    本机的临时文件凑数，图片要和 README 一起提交进版本库。
+    """
+
+    def test_readme_references_repository_images(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        sources = re.findall(r'<img\s+src="([^"]+)"', text)
+        self.assertGreaterEqual(len(sources), 4, "界面预览至少要有 4 张截图")
+
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertFalse(
+                    source.startswith(("http://", "https://")),
+                    f"截图必须来自仓库内，而不是外链：{source}",
+                )
+                path = ROOT / source
+                self.assertTrue(path.is_file(), f"README 引用的截图不存在：{source}")
+                self.assertGreater(
+                    path.stat().st_size,
+                    10_000,
+                    f"截图文件疑似损坏或占位：{source}",
+                )
+
+    def test_readme_images_all_have_alt_text(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        for source in re.findall(r'<img\s+src="([^"]+)"', text):
+            with self.subTest(source=source):
+                self.assertRegex(text, rf'<img\s+src="{re.escape(source)}"\s+alt="[^"]+"')
 
 
 class LauncherScriptTests(unittest.TestCase):

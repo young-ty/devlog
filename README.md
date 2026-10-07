@@ -4,6 +4,26 @@ DevLog 是面向个人开发者的**本地开发复盘工具**：扫描 Git 仓�
 按开发主题聚类，再生成一份“有据可查、人机共创”的结构化复盘草稿。
 事实论断带 commit 来源，AI 推断先标记为“待确认”，你确认并补充后导出 Markdown。
 
+## 界面预览
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/timeline-dark.png" alt="开发时间线"><br>
+<sub>开发时间线：提交、Bug、笔记、静默期挂在同一条曲线上，可拖动浏览</sub></td>
+<td width="50%"><img src="docs/images/review-light.png" alt="复盘草稿逐条校对"><br>
+<sub>复盘草稿：每条事实都带 commit 来源，逐条确认后才进成稿</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/bugs-dark.png" alt="Bug 现场捕获"><br>
+<sub>Bug 现场：一键存下报错、环境与 Git 状态，事后补根因和解法</sub></td>
+<td width="50%"><img src="docs/images/project-dark.png" alt="项目工作台"><br>
+<sub>项目工作台：扫描仓库、生成草稿、进入时间线与日常记录</sub></td>
+</tr>
+</table>
+
+> 截图取自本仓库自身的开发历史；时间线里的中文提交说明是 AI 翻译缓存，原始
+> commit subject 始终是事实来源。
+
 ## 快速体验（不装任何环境）
 
 到 [Releases](https://github.com/young-ty/devlog/releases/latest) 下载 `DevLog.exe`，双击运行，
@@ -155,7 +175,7 @@ python -m devlog.eval
 ```
 
 完整测试套件覆盖 Git 扫描、SQLite 存储、主题聚类、LLM、复盘生成/导出、
-每日小结、CLI、FastAPI、React 构建以及离线评测，共 340 个用例，全量跑完约 30 秒。
+每日小结、CLI、FastAPI、React 构建以及离线评测，共 343 个用例，全量跑完约 40 秒。
 
 ## 项目结构
 
