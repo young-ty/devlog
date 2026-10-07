@@ -2074,11 +2074,9 @@ button.tiny {
   top: 0;
 }
 
-.tl-clampable {
-  cursor: pointer;
-}
-
-.tl-card:hover {
+/* 能点的只有卡片底部那一个按钮，所以整卡不再有 pointer 光标，
+   高亮也跟着按钮走：整卡高亮会让人以为点正文也能展开。 */
+.tl-card:has(.tl-more:hover) {
   border-color: var(--border-strong);
 }
 
@@ -2089,11 +2087,6 @@ button.tiny {
      这里让卡片整体滚动：只压缩某一个子元素，会把它挤成一条缝。 */
   overflow-y: auto;
   scrollbar-width: thin;
-}
-
-.tl-clampable:focus-visible {
-  outline: 2px solid var(--accent-border-strong);
-  outline-offset: 2px;
 }
 
 .tl-card-head {
@@ -2169,20 +2162,34 @@ button.tiny {
   overflow-wrap: anywhere;
 }
 
-.tl-more {
+button.tl-more {
   flex: none;
   display: flex;
   align-items: center;
   gap: 3px;
+  width: 100%;
   margin-top: 7px;
+  padding: 2px 0 3px;
+  border: 0;
+  border-radius: 0;
+  background: var(--panel-hover);
+  text-align: left;
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
   /* 卡片内部会滚动，收起入口得一直钉在看得见的地方。 */
   position: sticky;
   bottom: 0;
-  padding-bottom: 2px;
+}
+
+button.tl-more:hover:not(:disabled) {
   background: var(--panel-hover);
+  color: var(--accent-bright);
+}
+
+button.tl-more:focus-visible {
+  outline: 2px solid var(--accent-border-strong);
+  outline-offset: 2px;
 }
 
 .tl-chevron {
@@ -2202,11 +2209,6 @@ button.tiny {
   overflow: visible;
   margin-top: 8px;
   padding: 8px;
-}
-
-/* 展开后追加内容的插槽。也是卡片的子项，同样不许被压缩。 */
-.tl-slot {
-  flex: none;
 }
 
 .tl-card .annotation-list {

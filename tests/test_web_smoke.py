@@ -551,7 +551,6 @@ class TimelineOpenCardTests(unittest.TestCase):
             ".tl-body",
             ".tl-extra",
             ".tl-more",
-            ".tl-slot",
             ".tl-card .annotation-panel",
         ):
             with self.subTest(selector=selector):
@@ -564,7 +563,7 @@ class TimelineOpenCardTests(unittest.TestCase):
 
     def test_collapse_entry_stays_visible_while_the_card_scrolls(self) -> None:
         # 卡片内部滚动后，"收起"会被滚到看不见的地方，得钉在底部。
-        more = css_rule(self.styles, ".tl-more")
+        more = css_rule(self.styles, "button.tl-more")
         self.assertIn("position: sticky", more)
         self.assertIn("bottom: 0", more)
 
@@ -580,12 +579,25 @@ class TimelineOpenCardTests(unittest.TestCase):
             with self.subTest(selector=selector):
                 self.assertIn(selector, self.styles)
 
-    def test_annotation_area_does_not_collapse_the_card(self) -> None:
-        # 整张卡片是"点开 / 收起"的按钮，点批注输入框不该把卡片收起来，
-        # 在输入框里敲空格也不该被卡片的键盘处理吞掉。
-        self.assertIn('className="tl-slot"', self.card)
-        self.assertIn("stopPropagation", self.card)
-        self.assertIn("{children}", self.card)
+    def test_only_the_expand_button_toggles_the_card(self) -> None:
+        """整张卡片都能点是个多余的手感：会顺手把批注输入框的点击也吃掉。
+
+        现在只有"展开 / 收起"这一个按钮能改状态，点正文、点批注区都不行。
+        """
+
+        self.assertIn('className="tl-more"', self.card)
+        self.assertIn("onClick={onToggle}", self.card)
+        self.assertIn("aria-expanded={open}", self.card)
+        # 卡片本身不许再自称按钮，也不许再有 pointer 光标。
+        self.assertNotIn('role="button"', self.card)
+        self.assertNotIn("tl-clampable", self.card)
+        self.assertNotIn("tl-clampable", self.styles)
+
+    def test_expand_entry_is_a_real_button(self) -> None:
+        # 用 div 冒充按钮，Tab 键永远停不到它上面，键盘用户就点不开卡片。
+        self.assertIn("<button", self.card)
+        self.assertIn('type="button"', self.card)
+        self.assertIn("button.tl-more:focus-visible", self.styles)
 
 
 if __name__ == "__main__":

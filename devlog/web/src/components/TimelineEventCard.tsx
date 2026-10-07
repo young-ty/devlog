@@ -160,33 +160,17 @@ export function TimelineEventCard({
   }
 
   const expandable = clampable || open;
-  const interactive = clampable
-    ? {
-        role: "button" as const,
-        tabIndex: 0,
-        "aria-expanded": open,
-        onClick: onToggle,
-        onKeyDown: (keyboardEvent: React.KeyboardEvent<HTMLElement>) => {
-          if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
-            keyboardEvent.preventDefault();
-            onToggle();
-          }
-        },
-      }
-    : {};
 
   return (
     <article
       className={[
         "tl-card",
         `tl-card-${content.tone}`,
-        clampable ? "tl-clampable" : "",
         open ? "tl-open" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       style={{ maxHeight }}
-      {...interactive}
     >
       <div className="tl-card-head">
         <span className="tl-tag">
@@ -206,22 +190,17 @@ export function TimelineEventCard({
       {open && content.detail && (
         <div className="tl-extra">{content.detail}</div>
       )}
-      {/* 卡片整体是个"点开 / 收起"的按钮，但批注区里要选类型、要打字。
-          不拦住事件的话，点一下输入框就把整张卡片收起来了。 */}
-      {open && children && (
-        <div
-          className="tl-slot"
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          {children}
-        </div>
-      )}
+      {open && children}
       {expandable && (
-        <div className="tl-more">
+        <button
+          type="button"
+          className="tl-more"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
           <span>{open ? "收起" : "展开"}</span>
           <Icon name="chevron" className="tl-chevron" />
-        </div>
+        </button>
       )}
     </article>
   );
