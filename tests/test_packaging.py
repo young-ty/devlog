@@ -48,7 +48,7 @@ class PackagingMetadataTests(unittest.TestCase):
     def test_version_is_derived_from_package(self) -> None:
         dynamic = self.metadata["tool"]["setuptools"]["dynamic"]
         self.assertEqual(dynamic["version"]["attr"], "devlog.__version__")
-        self.assertEqual(__version__, "0.1.0")
+        self.assertEqual(__version__, "0.1.1")
 
     def test_packaging_extra_is_optional_not_runtime(self) -> None:
         """PyInstaller 只服务打包，不该混进运行时依赖。"""
