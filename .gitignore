@@ -22,8 +22,3 @@ devlog/web/dist/
 # 打包产物（PyInstaller）
 /build/
 /dist/
-
-
-
-
-
