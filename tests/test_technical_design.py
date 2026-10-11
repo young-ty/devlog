@@ -27,7 +27,9 @@ def test_architecture_decision_present(doc: str) -> None:
 
 
 def test_tech_stack_present(doc: str) -> None:
-    for tech in ("FastAPI", "Typer", "React", "DeepSeek", "Pydantic", "pytest"):
+    # 断言实际在用的选型：解析层是标准库 argparse，测试是标准库 unittest。
+    # 初版计划里的 Typer / pytest 没有采用，文档里作为决策记录保留即可。
+    for tech in ("FastAPI", "argparse", "React", "DeepSeek", "Pydantic", "unittest"):
         assert tech in doc, f"missing tech choice: {tech}"
     assert "替代 Gradio" in doc or "Gradio" not in doc
 

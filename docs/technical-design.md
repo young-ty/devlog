@@ -1,14 +1,14 @@
-# DevLog 技术方案（V1）
+# DevLog 技术方案
 
-> 状态：Draft · 版本：0.1 · 2026-09-05
+> 状态：V1–V3 均已交付 · 初版 2026-09-05 · 2026-10-11 对齐实现现状
 > 配套文档：[product-design.md](./product-design.md)
 
 ## 1. 目标与范围
 
 本文档描述 DevLog V1 的技术方案：以本地 Git 仓库为唯一事实来源，提供"事件建模 → AI 复盘草稿 → 人工确认/编辑 → 导出 Markdown"的完整链路，并支撑 CLI 与本地 Web 两种使用方式。
 
-V1 不包含 Bug 现场捕获、开发中批注、复盘定稿（V2/V3）。坑点知识库与语义
-检索已移出范围，另立 RAG 项目。
+这一版初稿只覆盖 V1 链路；Bug 现场捕获、开发中批注、每日复盘与复盘定稿（原
+V2/V3）后来也都交付了，状态见 §11。坑点知识库与语义检索不在本项目范围内。
 
 ## 2. 总体架构
 
@@ -50,7 +50,7 @@ V1 不包含 Bug 现场捕获、开发中批注、复盘定稿（V2/V3）。坑�
 | Web 前端 | React + TypeScript + Vite | 时间线、复盘编辑器、diff 侧栏；替代 Gradio |
 | 状态存储 | SQLite（Python 标准库 sqlite3） | 本地单文件、事务安全、后续可加 FTS5 |
 | 配置 | `~/.devlog/config.toml` | API Key 等本地配置，禁止入库 |
-| 测试/质量 | pytest + 自定义评测脚本 + ruff | M4 评测集 + 常规测试 |
+| 测试/质量 | unittest（标准库）+ 自定义评测脚本 | 常规测试 + M4 评测集，无额外测试框架依赖 |
 
 ## 4. 分层与职责
 
@@ -61,7 +61,7 @@ V1 不包含 Bug 现场捕获、开发中批注、复盘定稿（V2/V3）。坑�
 - 噪音分类：merge、revert、wip、chore、依赖升级等；
 - 主题聚类：先按提交信息/文件路径做启发式聚合，再用 LLM 生成主题摘要（可回归评测）；
 - 支持增量扫描（记录上次扫描位置）与全量重建（历史改写后失效重建）；
-- 产物为 SQLite 中的 commit/theme 记录。
+- 产物为 SQLite 中的 commit 记录；主题是请求时按规则聚类出来的视图，不落库。
 
 ### 4.2 storage（SQLite 状态库）
 
@@ -103,12 +103,16 @@ MVP CLI（模块六，`python -m devlog`）：
 | `review generate [--offline]` | 生成草稿（离线 = 规则事实摘要） |
 | `review list [--draft]` | 列出草稿 / 查看逐条论断 |
 | `review confirm` | AI 推断 → 已确认 |
+| `review answer` | 回答草稿末尾的引导问题 |
 | `review export` | 草稿导出为 Markdown |
+| `review delete` | 清掉旧格式草稿 |
+| `serve [--open]` | 起本地 Web 服务（默认 127.0.0.1:8000） |
+| `doctor` | 自检前端产物 / Git / 数据库 / 大模型配置 |
 
 `cli/main.py` 只做参数解析与结果打印，真正流程在 `cli/runner.py`
-（服务层），模块七 FastAPI 直接复用 runner。FastAPI 提供同能力 REST
-接口，Web 前端只消费 API；前端页面为项目概览 / 时间线 / AI 复盘编辑器
-（Bug 追踪为 V2 占位）。
+（服务层），FastAPI 直接复用 runner。FastAPI 提供同能力 REST
+接口，Web 前端只消费 API；前端页面为项目列表 / 项目工作台 / 开发时间线 /
+AI 复盘 / Bug 现场 / 每日复盘。
 
 > 决策记录：V1 选用标准库 argparse 而非 Typer，是为了保持零第三方依赖，
 > 让 `python -m devlog` 开箱即用。解析层是薄壳，未来引入 Typer 只改
@@ -116,8 +120,7 @@ MVP CLI（模块六，`python -m devlog`）：
 
 前端落地（模块八）：React + TypeScript + Vite，代码位于 `devlog/web/`；
 开发时 Vite 把 `/api` 代理到 `http://127.0.0.1:8000`，浏览器不直接跨源。
-MVP 只有三个页面（项目列表 / 项目详情 / 复盘编辑器），页面切换由
-`App.tsx` 状态完成，暂不引入 React Router 与 Redux。
+页面切换由 `App.tsx` 里的状态完成，不引入 React Router 与 Redux。
 
 ## 5. 核心数据模型（初版）
 
@@ -138,17 +141,13 @@ MVP 只有三个页面（项目列表 / 项目详情 / 复盘编辑器），页�
 | author / committed_at / message | 原始信息 |
 | files_changed / insertions / deletions | 变更统计 |
 | noise_type | null / merge / wip / chore 等 |
-| theme_id | 聚类归属 |
 
-### themes
+### 主题（不落库）
 
-| 字段 | 说明 |
-|---|---|
-| id / project_id / name / summary | 主题 |
-| sources_json | 来源 commit 列表 |
-| status | `fact` / `ai_pending` / `confirmed` |
+主题由 `devlog/core/theming/cluster.py` 在请求时从 commit 缓存聚类出来，不进数据库：
+它完全由 commit 推导，落库只会多一份需要同步的副本。
 
-### review_drafts / review_claims（草稿与论断，schema v2）
+### review_drafts / review_claims（草稿与论断）
 
 ### review_drafts
 
@@ -169,6 +168,12 @@ MVP 只有三个页面（项目列表 / 项目详情 / 复盘编辑器），页�
 | status | `fact` / `ai_pending` / `confirmed` / `edited` |
 | user_note | 用户补充 |
 
+### commit_translations / dev_notes / bug_records / commit_annotations / draft_answers
+
+V2/V3 补上的记忆层与配套数据：commit 中文翻译缓存、每日笔记、Bug 记录、挂在
+commit 上的批注、以及引导问题的回答。它们的共同点是「Git 里没有、只有人知道」，
+所以不参与重扫重建；翻译缓存是唯一例外——它由模型生成，删掉重翻一次即可。
+
 ### 外部产物
 
 ```text
@@ -176,6 +181,9 @@ MVP 只有三个页面（项目列表 / 项目详情 / 复盘编辑器），页�
 ```
 
 ## 6. 本地 API（示意）
+
+下面是主干路由；实现里共 31 个路由，另有批注新增 / 删除、Bug 更新 / 删除、
+项目详情与删除等。
 
 ```text
 GET    /api/projects
@@ -200,21 +208,26 @@ POST   /api/reviews/{draft_id}/export
 4. **结构化输出 + 校验**：AI 输出先过 Pydantic schema，非法则重试/降级，防止脏数据进入草稿。
 5. **防幻觉内建于数据模型**：论断区分"有来源的事实"与"待确认的推断"，无来源内容只能是引导问题。
 6. **成本可预期**：分块摘要 + 增量扫描 + 结果缓存，避免重复调用浪费 token。
-7. **数据库版本化演进**：`SCHEMA_VERSION = 2`，v1→v2 通过 `PRAGMA user_version`
-   迁移新增草稿表；旧库升级不丢数据，新库从零按序建表。
+7. **数据库版本化演进**：`SCHEMA_VERSION = 7`，通过 `PRAGMA user_version`
+   按 v1→v7 顺序迁移（草稿与论断、翻译缓存、记忆层、引导回答等）；旧库升级不丢
+   数据，新库从零按序建表，运行时发现库版本高于本程序支持的版本会直接拒绝。
 
 ## 8. 安全与隐私
 
 - 全部数据留在本机，无云端同步；
 - API Key 只存 `~/.devlog/config.toml`（建议 chmod 600），仓库与代码库均不包含；
 - 写 Key 的接口只对本机请求开放（非 127.0.0.1 / ::1 一律 403），读接口也只回掩码；
-- V2 Bug 捕获才涉及堆栈/环境信息入库，届时加入脱敏与确认流程（本期仅预留字段设计空间）。
+- Bug 捕获会存下你填进去的报错与环境信息，以及仓库的 HEAD / 工作区状态：写入前
+  由你自己确认，程序不做自动脱敏，密钥、内网地址这类内容请在填之前删掉。这些记录
+  只落在 `~/.devlog/devlog.db`，不会进入任何仓库。
 
 ## 9. 工程质量与评测
 
 - 单元测试：git 解析、主题聚类规则、schema 校验、导出渲染；
 - 集成测试：临时 Git 仓库（构造固定提交历史）跑 scan → generate → confirm → export 全链路；
-- 评测集（M4）：20-30 条人工标注 golden set，用相似度 + LLM-as-judge 量化摘要/复盘质量；
+- 评测集（M4）：人工标注的 golden set（当前 9 条，`devlog/eval/cases.py`），
+  离线跑规则版候选并按覆盖度 / 来源精确率 / 召回率 / 类型匹配打分，在线可再加
+  LLM 打分，平均分低于阈值判不通过；
 - 每次改动按 AGENTS.md 要求提交并跑全部测试。
 
 ## 10. 建议目录结构
@@ -224,30 +237,34 @@ devlog/
 ├── core/
 │   ├── git_source/       # Git 解析与事件建模
 │   ├── storage/          # SQLite schema 与迁移
+│   ├── theming/          # 主题聚类
+│   ├── timeline/         # 提交 / Bug / 笔记合成时间线
+│   ├── digest/           # 当日小结
+│   ├── capture/          # 每日笔记与 Bug 捕获
 │   ├── llm/              # provider 抽象与分块摘要
-│   └── review/           # 草稿组装与导出
+│   └── review/           # 草稿组装、成稿规则与导出
 ├── cli/                  # argparse 解析 + runner 服务层
 ├── server/               # FastAPI 应用
+├── eval/                 # golden set 离线评测
 ├── web/                  # React + Vite 前端
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── eval/             # golden set 与评测脚本
+├── tests/                # unittest：单测 + 临时 Git 仓库跑全链路的集成测试
 ├── docs/                 # 产品与设计文档
+├── packaging/            # PyInstaller spec
 └── AGENTS.md
 ```
 
-## 11. 里程碑（建议顺序）
+## 11. 里程碑（已全部交付）
 
 1. **M1**：仓库接入 + Git 事件建模 + SQLite 落库（CLI：init/scan）；
-2. **M2**：LLM provider + 分块摘要 + 结构化复盘草稿（CLI：generate，本地 Markdown 预览）；
+2. **M2**：LLM provider + 分块摘要 + 结构化复盘草稿（CLI：generate）；
 3. **M3**：FastAPI + React 界面，接入确认/编辑/导出闭环；
 4. **M4**：评测集与回归脚本，跑通全链路并 dogfood 真实项目；
-5. 打磨：错误处理、增量扫描边界（rebase/force push）、打包体验。
+5. 打磨：错误处理、增量扫描边界（rebase/force push）、打包体验；
+6. 原 V2/V3：Bug 捕获、每日复盘、批注、阅读视图与定稿归档。
 
 ## 12. 主要风险
 
 - **Git 历史形态多样**：merge 图、作者时区、超大仓库、乱写 commit message → 用集成测试固定行为；
 - **LLM 输出质量波动**：靠 schema 校验 + golden set 回归兜底；
 - **token 成本**：分块聚合 + 缓存 + 可换低成本模型；
-- **范围膨胀**：严格按非目标执行，V2/V3 只做接口与 schema 预留。
+- **范围膨胀**：严格按非目标执行（不做团队协作与云端托管），语义检索留在范围外。
