@@ -199,8 +199,8 @@ export function SettingsDialog({
           />
         </div>
 
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
+        {error && <p className="message error">{error}</p>}
+        {message && <p className="message success">{message}</p>}
 
         <div className="modal-actions">
           <button

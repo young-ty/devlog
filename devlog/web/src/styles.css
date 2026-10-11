@@ -550,13 +550,15 @@ div.item-card:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.error {
+/* 语气提示只挂在 .message 上。裸类名 .success 会连 .stat-value.success
+   一起命中，把统计卡片整块染上底色和边框。 */
+.message.error {
   color: var(--danger-text);
   background: var(--danger-soft);
   border: 1px solid var(--danger-border);
 }
 
-.success {
+.message.success {
   color: var(--success-bright);
   background: var(--success-soft);
   border: 1px solid var(--success-border);

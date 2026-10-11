@@ -375,6 +375,30 @@ class VisualToneTests(unittest.TestCase):
     def test_panel_radius_stays_tool_like(self) -> None:
         self.assertIn("--radius: 8px;", self.styles)
 
+    def test_tone_classes_stay_scoped_to_messages(self) -> None:
+        """语气类名必须挂在 .message 上，不能是裸类名。
+
+        裸 .success 会连 .stat-value.success 一起命中，项目页"已确认"
+        那格因此整块变绿。
+        """
+
+        self.assertNotIn("\n.success {", self.styles)
+        self.assertNotIn("\n.error {", self.styles)
+        self.assertIn("background", css_rule(self.styles, ".message.success"))
+        self.assertIn("background", css_rule(self.styles, ".message.error"))
+
+        dialog = (
+            WEB_DIR / "src" / "components" / "SettingsDialog.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn('className="message error"', dialog)
+        self.assertIn('className="message success"', dialog)
+
+        # 组合类名要留着：统计卡片本来就该用绿字表示"已确认"的数量
+        project = (WEB_DIR / "src" / "pages" / "ProjectPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('className="stat-value success"', project)
+
 
 class ThemeTests(unittest.TestCase):
     """明暗主题：开关在界面里，颜色全走变量，首屏不能闪。"""
