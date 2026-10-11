@@ -171,13 +171,12 @@ dist\DevLog.exe serve --open    # 等价于双击 exe
 
 ```powershell
 python -m unittest discover -s tests
-python tests/test_product_design.py
-python tests/test_technical_design.py
 python -m devlog.eval
 ```
 
 完整测试套件覆盖 Git 扫描、SQLite 存储、主题聚类、LLM、复盘生成/导出、
-每日小结、CLI、FastAPI、React 构建以及离线评测，共 357 个用例，全量跑完约 30 秒。
+每日小结、CLI、FastAPI、React 构建、设计文档关键词以及离线评测，共 358 个用例，
+全量跑完约 30 秒。
 每次 push 和 PR 都会在 GitHub Actions 上重跑一遍全量测试，并单独做一次前端类型
 检查与构建，配置见 [.github/workflows/tests.yml](.github/workflows/tests.yml)。
 

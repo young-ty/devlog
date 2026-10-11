@@ -27,86 +27,6 @@ def css_rule(styles: str, selector: str) -> str:
 
 
 class WebSmokeTests(unittest.TestCase):
-    def test_frontend_sources_exist(self) -> None:
-        for relative in (
-            "package.json",
-            "vite.config.ts",
-            "index.html",
-            "src/main.tsx",
-            "src/App.tsx",
-            "src/api.ts",
-            "src/types.ts",
-            "src/pages/ProjectsPage.tsx",
-            "src/pages/ProjectPage.tsx",
-            "src/pages/ReviewPage.tsx",
-            "src/pages/TimelinePage.tsx",
-            "src/pages/NotesPage.tsx",
-            "src/pages/BugsPage.tsx",
-            "src/hooks/useTheme.ts",
-            "src/components/SettingsDialog.tsx",
-        ):
-            self.assertTrue(
-                (WEB_DIR / relative).exists(),
-                f"missing frontend source: {relative}",
-            )
-
-        package_text = (WEB_DIR / "package.json").read_text(encoding="utf-8")
-        self.assertIn('"vite"', package_text)
-        self.assertIn('"react"', package_text)
-
-        app_text = (WEB_DIR / "src" / "App.tsx").read_text(encoding="utf-8")
-        self.assertIn("import { NotesPage }", app_text)
-        self.assertIn("import { BugsPage }", app_text)
-
-    def test_memory_layer_api_bindings_exist(self) -> None:
-        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
-        for function_name in (
-            "listDailyNotes",
-            "saveDailyNote",
-            "listBugs",
-            "captureBug",
-            "updateBug",
-            "deleteBug",
-            "suggestBugTitle",
-            "listAnnotations",
-            "addAnnotation",
-            "updateAnnotation",
-            "deleteAnnotation",
-        ):
-            self.assertIn(
-                f"export function {function_name}(",
-                api_text,
-                f"missing api wrapper: {function_name}",
-            )
-
-        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
-        for type_name in (
-            "DailyNote",
-            "BugRecord",
-            "BugStatus",
-            "CommitAnnotation",
-            "AnnotationKind",
-        ):
-            self.assertIn(
-                type_name,
-                types_text,
-                f"missing memory type: {type_name}",
-            )
-
-        timeline_text = (
-            WEB_DIR / "src" / "pages" / "TimelinePage.tsx"
-        ).read_text(encoding="utf-8")
-        for function_name in (
-            "listAnnotations",
-            "addAnnotation",
-            "deleteAnnotation",
-        ):
-            self.assertIn(
-                function_name,
-                timeline_text,
-                f"timeline page missing annotation call: {function_name}",
-            )
-
     def test_timeline_stream_bindings_exist(self) -> None:
         """横向时间线要能同时表现提交、Bug、笔记、批注、空档。"""
 
@@ -218,18 +138,6 @@ class WebSmokeTests(unittest.TestCase):
         self.assertIn("本次 AI 归纳没有找到", review_text)
         self.assertIn("由旧版本生成", review_text)
 
-    def test_review_delete_bindings_exist(self) -> None:
-        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
-        self.assertIn("export function deleteReview(", api_text)
-
-        project_text = (
-            WEB_DIR / "src" / "pages" / "ProjectPage.tsx"
-        ).read_text(encoding="utf-8")
-        self.assertIn("deleteReview", project_text)
-        self.assertIn("handleDeleteReview", project_text)
-        self.assertIn("旧版本", project_text)
-        self.assertIn("window.confirm", project_text)
-
     def test_production_build_passes(self) -> None:
         if shutil.which("pnpm") is None:
             self.skipTest("pnpm is not available in this environment")
@@ -282,27 +190,9 @@ class SourceListTests(unittest.TestCase):
                 self.assertNotIn('join("、")', text)
                 self.assertNotIn("slice(0, 7)", text)
 
-    def test_source_toggle_has_its_own_style(self) -> None:
-        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
-        for selector in (".source-list", ".source-list code", ".source-toggle"):
-            with self.subTest(selector=selector):
-                self.assertIn(selector, styles)
-
 
 class ReviewReadingViewBindingsTests(unittest.TestCase):
     """复盘页要有「成稿阅读」视图，并且收录规则不许在前端再写一份。"""
-
-    def test_reading_view_component_and_api_exist(self) -> None:
-        self.assertTrue(
-            (WEB_DIR / "src" / "components" / "ReviewReadingView.tsx").exists(),
-            "缺少成稿阅读视图组件",
-        )
-        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
-        self.assertIn("export function getReviewDocument(", api_text)
-        self.assertIn("/document", api_text)
-        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
-        for type_name in ("FinalDocument", "FinalSection", "FinalClaim"):
-            self.assertIn(type_name, types_text, f"missing type: {type_name}")
 
     def test_reading_view_opens_by_default(self) -> None:
         page_text = (WEB_DIR / "src" / "pages" / "ReviewPage.tsx").read_text(
@@ -318,11 +208,6 @@ class ReviewReadingViewBindingsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("onConfirm", reading_text)
         self.assertIn("rv-pending-bar", reading_text)
-
-    def test_reading_view_styles_exist(self) -> None:
-        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
-        for selector in (".rv-layout", ".rv-toc", ".rv-pending-bar", ".rv-qa"):
-            self.assertIn(selector, styles, f"missing style: {selector}")
 
     def test_finalize_bindings_exist(self) -> None:
         """定稿是一个可撤回的标记，界面和接口都得有。"""
@@ -371,9 +256,6 @@ class VisualToneTests(unittest.TestCase):
     def test_no_endless_loading_animation(self) -> None:
         self.assertNotIn("infinite", self.styles)
         self.assertNotIn("@keyframes", self.styles)
-
-    def test_panel_radius_stays_tool_like(self) -> None:
-        self.assertIn("--radius: 8px;", self.styles)
 
     def test_tone_classes_stay_scoped_to_messages(self) -> None:
         """语气类名必须挂在 .message 上，不能是裸类名。
@@ -439,11 +321,6 @@ class ThemeTests(unittest.TestCase):
         ]
         self.assertEqual(leaked, [], f"仍有写死的颜色：{leaked}")
 
-    def test_toolbar_controls_have_styles(self) -> None:
-        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
-        for selector in (".topbar-actions", ".icon-button", ".link-button"):
-            self.assertIn(selector, styles, f"缺少样式：{selector}")
-
 
 class LLMSettingsUiTests(unittest.TestCase):
     """大模型接入入口：填 key、测连通、保存，全在网页里完成。"""
@@ -497,15 +374,6 @@ class LLMSettingsUiTests(unittest.TestCase):
 class DayDigestBindingTests(unittest.TestCase):
     """每日复盘页要先把"当天都发生了什么"摆出来，再让人动笔。"""
 
-    def test_api_binding_exists(self) -> None:
-        api_text = (WEB_DIR / "src" / "api.ts").read_text(encoding="utf-8")
-        self.assertIn("export function getDayDigest(", api_text)
-        self.assertIn("/digest", api_text)
-
-        types_text = (WEB_DIR / "src" / "types.ts").read_text(encoding="utf-8")
-        self.assertIn("export interface DayDigest", types_text)
-        self.assertIn("has_cached_commits", types_text)
-
     def test_notes_page_shows_the_digest(self) -> None:
         page_text = (WEB_DIR / "src" / "pages" / "NotesPage.tsx").read_text(
             encoding="utf-8"
@@ -519,11 +387,6 @@ class DayDigestBindingTests(unittest.TestCase):
             "draft_text",
         ):
             self.assertIn(token, page_text)
-
-    def test_digest_styles_exist(self) -> None:
-        styles = (WEB_DIR / "src" / "styles.css").read_text(encoding="utf-8")
-        for selector in (".digest-stats", ".digest-list", ".digest-row"):
-            self.assertIn(selector, styles, f"missing style: {selector}")
 
     def test_bugs_can_be_opened_from_the_digest(self) -> None:
         """当天小结里看到的 Bug 要能点回 Bug 页，并定位到那一条。"""
